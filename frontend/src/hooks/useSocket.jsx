@@ -14,7 +14,7 @@ const useSocket = () => {
 
   useEffect(() => {
     // Connect to server
-    const newSocket = io('http://localhost:5000');
+    const newSocket = io('http://localhost:8000');
     setSocket(newSocket);
 
     newSocket.on('connect', () => {

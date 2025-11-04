@@ -11,6 +11,7 @@ export default function RoomCodeBox() {
   return (
     <div className="bg-white px-6 py-4 rounded-lg shadow-md text-center">
       <p className="text-sm text-gray-600">Room Code</p>
+      
       <div className="flex items-center justify-center gap-2 mt-1">
         <p className="font-bold text-lg tracking-widest">{roomCode}</p>
         <button onClick={copyToClipboard}>

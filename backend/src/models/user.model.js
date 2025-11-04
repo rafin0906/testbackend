@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-
+import jwt from "jsonwebtoken";
 /**
  * User Schema - Simplified
  * Represents a player with all game state consolidated
@@ -99,6 +99,23 @@ UserSchema.statics.findByRoom = async function (roomId) {
  */
 UserSchema.statics.findByRoleInRoom = async function (roomId, role) {
   return await this.findOne({ roomId, role });
+};
+
+// Generate JWT token for host access
+UserSchema.methods.generateHostAccessToken = function () {
+    if (!this.isHost) {
+    throw new Error("Only host user can generate host access token");
+  }
+  return jwt.sign(
+    {
+      id: this._id,
+      roomId: this.roomId,
+    },
+    process.env.ACCESS_TOKEN_SECRET,
+    { expiresIn: process.env.ACCESS_TOKEN_EXPIRY || "1h" }
+  );
+
+   
 };
 
 export const User = mongoose.model("User", UserSchema);

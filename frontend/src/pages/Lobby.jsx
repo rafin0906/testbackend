@@ -3,6 +3,7 @@ import TitleBanner from "../components/lobby/TitleBanner";
 import PlayerList from "../components/lobby/PlayerList";
 import RoundSelector from "../components/lobby/RoundSelector";
 import StartButton from "../components/lobby/StartButton";
+import RoomCodeBox from "../components/lobby/RoomCodeBox";
 
 
 export default function Lobby() {
@@ -18,6 +19,7 @@ export default function Lobby() {
                 <TitleBanner />
                 <PlayerList />
                 <RoundSelector />
+                <RoomCodeBox />
                 <StartButton />
             </div>
         </div>

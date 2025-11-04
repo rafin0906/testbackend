@@ -15,10 +15,14 @@ app.use(express.static("public"));
 
 app.use(cookieParser());
 
-// mount API routes
 
 
-// error handler (last)
+// routes import
+import gameRoomRouter from "./routes/gameRoom.route.js";
+
+
+// routes deeclaration
+app.use("/api/v1/rooms", gameRoomRouter);
 
 
 export default app

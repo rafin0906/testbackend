@@ -7,7 +7,7 @@ export default function JoinButton({ roomCode }) {
 
   const handleJoin = () => {
     if (!roomCode.trim()) {
-      setError('Please enter a valid room code before joining!');
+      setError('Please enter a valid room code!');
       return;
     }
 

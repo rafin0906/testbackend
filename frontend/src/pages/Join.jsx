@@ -3,6 +3,7 @@ import TitleHeader from "../components/join/TitleHeader";
 import RoomCodeInput from "../components/join/RoomCodeInput";
 import JoinButton from "../components/join/JoinButton";
 import BackArrow from "../components/utility/BackArrow";
+import NicknameInput from "../components/home/NicknameInput";
 
 export default function Join() {
     const [roomCode, setRoomCode] = useState("");
@@ -15,6 +16,7 @@ export default function Join() {
             <BackArrow />
             <div className="flex flex-col items-center justify-center space-y-3">
                 <TitleHeader />
+                <NicknameInput />
                 <RoomCodeInput value={roomCode} onChange={(e) => setRoomCode(e.target.value)} />
                 <JoinButton roomCode={roomCode} />
             </div>
