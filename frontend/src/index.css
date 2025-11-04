@@ -1,0 +1,19 @@
+@import "tailwindcss";
+@font-face {
+  font-family: 'LipighorBangla';
+  src: url('./assets/fonts/LipighorBangla.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Sunflower:wght@300;500;700&display=swap');
+
+
+body {
+  margin: 0;
+  background-color: #fffdee;
+}
+
+* {
+   font-family: 'Sunflower', sans-serif;
+}
