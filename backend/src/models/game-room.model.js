@@ -26,7 +26,7 @@ const GameRoomSchema = new mongoose.Schema(
       type: Number,
       required: true,
       min: [1, "Must have at least 1 round"],
-      max: [20, "Cannot exceed 20 rounds"],
+      max: [40, "Cannot exceed 40 rounds"],
       default: 5,
     },
     currentRound: {
@@ -64,68 +64,6 @@ const GameRoomSchema = new mongoose.Schema(
 GameRoomSchema.index({ gameStatus: 1, expiresAt: 1 });
 GameRoomSchema.index({ roomCode: 1 }, { unique: true });
 
-/**
- * Generate unique 6-character room code
- */
-const generateRoomCode = () => {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let code = "";
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-};
-
-/**
- * Create a new game room
- */
-GameRoomSchema.statics.createNewRoom = async function (
-  hostId,
-  totalRounds = 5
-) {
-  let roomCode;
-  let attempts = 0;
-  const maxAttempts = 10;
-
-  while (attempts < maxAttempts) {
-    roomCode = generateRoomCode();
-    const existing = await this.findOne({ roomCode });
-    if (!existing) break;
-    attempts++;
-  }
-
-  if (attempts === maxAttempts) {
-    throw new Error("Failed to generate unique room code");
-  }
-
-  return await this.create({
-    hostId,
-    roomCode,
-    totalRounds,
-  });
-};
-
-/**
- * Start the game
- */
-GameRoomSchema.methods.startGame = async function () {
- 
-  const playerCount = await User.countDocuments({ roomId: this._id });
-
-  if (playerCount !== 4) {
-    throw new Error("Need exactly 4 players to start the game");
-  }
-
-  this.gameStatus = "in_progress";
-  this.currentRound = 1;
-  
-  // Assign random instruction for first round
-  this.currentInstruction = ["Find Chor", "Find Dakat"][
-    Math.floor(Math.random() * 2)
-  ];
-
-  return await this.save();
-};
 
 /**
  * Assign roles to all players in the room
