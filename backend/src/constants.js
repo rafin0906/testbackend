@@ -1,1 +1,1 @@
-export const DB_NAME = "professional-backend"
+export const DB_NAME = "chor-police-db"
