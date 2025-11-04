@@ -26,7 +26,7 @@ export const verifyHost = asyncHandler(async (req, _, next) => {
         }
 
         // Attach host info to request object
-        req.host = host;        // full host object
+        req.hostUser = host;        // full host object
         req.hostId = host._id;  // convenience
         req.roomId = decoded.roomId || host.roomId;
 

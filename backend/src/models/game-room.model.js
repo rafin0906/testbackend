@@ -31,8 +31,8 @@ const GameRoomSchema = new mongoose.Schema(
     },
     currentRound: {
       type: Number,
-      default: 1,
-      min: 1,
+      default: 0,
+      min: 0,
     },
     gameStatus: {
       type: String,

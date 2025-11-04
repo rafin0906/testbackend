@@ -59,23 +59,23 @@ const createRoom = asyncHandler(async (req, res) => {
     // generate host access token 
     let hostToken = null;
     try {
-      hostToken = host.generateHostAccessToken?.() || null;
+        hostToken = host.generateHostAccessToken?.() || null;
     } catch (err) {
-      // do not block room creation if token generation fails; log error
-      console.error("Host token generation failed:", err);
+        // do not block room creation if token generation fails; log error
+        console.error("Host token generation failed:", err);
     }
 
     const options = {
         httpOnly: true,
         secure: true
     }
-    
-  
+
+
     // respond with host, room, and set hostToken cookie
     return res
-    .status(201)
-    .cookie('hostToken', hostToken, options)
-    .json({ host, room, hostToken })//after getting this response we will get host and room data in frontend
+        .status(201)
+        .cookie('hostToken', hostToken, options)
+        .json({ host, room, hostToken })//after getting this response we will get host and room data in frontend
 });
 
 /**
@@ -120,16 +120,23 @@ const joinRoom = asyncHandler(async (req, res) => {
  * -> ensure exactly 4 users, then set gameStatus and start round (currentRound = 1)
  */
 const startGame = asyncHandler(async (req, res) => {
-    const { roomId } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(roomId)) return res.status(400).json({ message: "Invalid roomId" });
-
+    const { roomId } = req.params; // from frontend i have to send roomId in params 
+    if (!mongoose.Types.ObjectId.isValid(roomId)) {
+        return res.status(400).json({ message: "Invalid roomId" });
+    }
     const room = await GameRoom.findById(roomId);
-    if (!room) return res.status(404).json({ message: "Room not found" });
-    if (room.gameStatus !== "waiting") return res.status(400).json({ message: "Game already started or finished" });
-
+    if (!room) {
+        return res.status(404).json({ message: "Room not found" });
+    }
+    if (room.gameStatus !== "waiting") {
+        return res.status(400).json({ message: "Game already started or finished" });
+    }
     const playerCount = await User.countDocuments({ roomId: room._id });
-    if (playerCount !== 4) return res.status(400).json({ message: "Need exactly 4 players to start the game" });
 
+    if (playerCount !== 4) {
+        return res.status(400).json({ message: "Need exactly 4 players to start the game" });
+    }
+    // starting the game
     room.gameStatus = "in_progress";
     room.currentRound = 1;
     room.currentInstruction = ["Find Chor", "Find Dakat"][Math.floor(Math.random() * 2)];
