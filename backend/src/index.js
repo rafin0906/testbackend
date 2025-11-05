@@ -20,6 +20,7 @@ async function start() {
     cors: {
       origin: process.env.CORS_ORIGIN || "*",
       methods: ["GET", "POST"],
+      credentials: true,
     },
   });
 

@@ -1,6 +1,5 @@
 import React from 'react';
 import TitleHeader from '../components/home/TitleHeader';
-import NicknameInput from '../components/home/NicknameInput';
 import CreateJoinButtons from '../components/home/CreateJoinButtons';
 import '../index.css';
 

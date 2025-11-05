@@ -1,18 +1,12 @@
-import { createContext, useContext, useState } from 'react';
-import { nanoid } from 'nanoid';
+import { createContext, useContext, useState } from "react";
 
 const RoomContext = createContext();
 
 export function RoomProvider({ children }) {
-  const [roomCode, setRoomCode] = useState(nanoid(10)); // 10-character code
-
-  const regenerateCode = () => {
-    const newCode = nanoid(10);
-    setRoomCode(newCode);
-  };
+  const [roomCode, setRoomCode] = useState("");
 
   return (
-    <RoomContext.Provider value={{ roomCode, regenerateCode }}>
+    <RoomContext.Provider value={{ roomCode, setRoomCode }}>
       {children}
     </RoomContext.Provider>
   );
