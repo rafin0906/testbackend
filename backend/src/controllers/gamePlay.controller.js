@@ -109,13 +109,25 @@ const finalizeRoundAsNoGuess = async (roomId, io) => {
   const room = await GameRoom.findById(rid);
   const players = await User.find({ roomId: rid });
 
-  const king = players.find((p) => p.role === "King");
+  // compute per-player points for "no guess" case
+  const pointsMap = new Map(); // userIdString -> points
   players.forEach((p) => {
-    if (p.role === "King") p.score += 1000;
-    else if (p.role === "Chor") p.score += 400;
-    else if (p.role === "Dakat") p.score += 600;
+    let pts = 0;
+    if (p.role === "King") pts = 1000;
+    else if (p.role === "Chor") pts = 400;
+    else if (p.role === "Dakat") pts = 600;
+    else if (p.role === "Police") pts = 0;
+    pointsMap.set(p._id.toString(), pts);
+    p.score = (p.score || 0) + pts;
   });
+
   await Promise.all(players.map((p) => p.save()));
+
+  // create playerScores array from pointsMap
+  const playerScores = players.map((p) => ({
+    userId: p._id,
+    points: pointsMap.get(p._id.toString()) || 0,
+  }));
 
   await Round.create({
     roomId: rid,
@@ -131,13 +143,15 @@ const finalizeRoundAsNoGuess = async (roomId, io) => {
       chor: players.find((p) => p.role === "Chor")._id,
       dakat: players.find((p) => p.role === "Dakat")._id,
     },
-    scoreChanges: players.map((p) => ({ userId: p._id, points: p.score })),
+    playerScores,
     guessedAt: new Date(),
   });
 
   io.to(rid).emit("roundResult", { success: false, message: "No guess made in time" });
 
-  const leaderboard = await User.find({ roomId: rid }).sort({ score: -1 }).select("name score role");
+  const leaderboard = await User.find({ roomId: rid })
+    .sort({ score: -1 })
+    .select("name score role");
   io.to(rid).emit("leaderboard", leaderboard);
 
   io.to(rid).emit("revealRoles", players.map((p) => ({ name: p.name, role: p.role })));
@@ -165,8 +179,10 @@ const finalizeRoundAsNoGuess = async (roomId, io) => {
 const handlePoliceGuess = async (roomId, policeId, guessedUserId, io, socket) => {
   const rid = String(roomId);
   const state = roomState.get(rid);
+
+  // 🎮 If the round has already ended (timer ran out or result decided), and police tries to guess — ignore it and show error.
   if (!state || state.resolved) {
-    socket.emit("error", { message: "No active round or already resolved" });
+    socket.emit("error", { message: "Round already Finished" });
     return;
   }
   if (state.policeId !== policeId) {
@@ -187,29 +203,58 @@ const handlePoliceGuess = async (roomId, policeId, guessedUserId, io, socket) =>
   const king = players.find((p) => p.role === "King");
 
   const targetRole = state.instruction === "Find Chor" ? "Chor" : "Dakat";
-  let isCorrect = false;
+
+  // compute per-player points according to rules
+  const pointsMap = new Map(); // userIdString -> points
 
   if (guessed && guessed.role === targetRole) {
-    isCorrect = true;
-    police.score += 800;
-    king.score += 1000;
+    // police guessed right
+    // rules:
+    // King:1000, Police:800, guessedUser:0
+    // remaining player: if role === 'Chor' -> 400, if role === 'Dakat' -> 600
+    players.forEach((p) => pointsMap.set(p._id.toString(), 0)); // init
+    if (king) pointsMap.set(king._id.toString(), 1000);
+    if (police) pointsMap.set(police._id.toString(), 800);
+    pointsMap.set(guessed._id.toString(), 0);
 
     const remaining = players.find(
       (p) =>
-        ![police._id.toString(), guessed._id.toString(), king._id.toString()].includes(p._id.toString())
+        ![
+          king?._id.toString(),
+          police?._id.toString(),
+          guessed?._id.toString(),
+        ].includes(p._id.toString())
     );
-    if (remaining) remaining.score += remaining.role === "Chor" ? 400 : 600;
+    if (remaining) {
+      const remPts = remaining.role === "Chor" ? 400 : 600;
+      pointsMap.set(remaining._id.toString(), remPts);
+    }
   } else {
-    king.score += 1000;
+    // police guessed wrong (or guessed is invalid)
+    // rules:
+    // King:1000, Police:0, Chor:400, Dakat:600
     players.forEach((p) => {
-      if (p._id.toString() !== police._id.toString() && p._id.toString() !== king._id.toString()) {
-        if (p.role === "Chor") p.score += 400;
-        else if (p.role === "Dakat") p.score += 600;
-      }
+      let pts = 0;
+      if (p.role === "King") pts = 1000;
+      else if (p.role === "Police") pts = 0;
+      else if (p.role === "Chor") pts = 400;
+      else if (p.role === "Dakat") pts = 600;
+      pointsMap.set(p._id.toString(), pts);
     });
   }
 
+  // apply increments to users and save
+  players.forEach((p) => {
+    const inc = pointsMap.get(p._id.toString()) || 0;
+    p.score = (p.score || 0) + inc;
+  });
   await Promise.all(players.map((p) => p.save()));
+
+  // build playerScores array
+  const playerScores = players.map((p) => ({
+    userId: p._id,
+    points: pointsMap.get(p._id.toString()) || 0,
+  }));
 
   await Round.create({
     roomId: rid,
@@ -218,20 +263,20 @@ const handlePoliceGuess = async (roomId, policeId, guessedUserId, io, socket) =>
     policeId,
     guessedUserId,
     targetRole,
-    isCorrect,
+    isCorrect: guessed && guessed.role === targetRole,
     roleAssignments: {
       king: king._id,
       police: police._id,
       chor: players.find((p) => p.role === "Chor")._id,
       dakat: players.find((p) => p.role === "Dakat")._id,
     },
-    scoreChanges: players.map((p) => ({ userId: p._id, points: p.score })),
+    playerScores,
     guessedAt: new Date(),
   });
 
   io.to(rid).emit("roundResult", {
-    isCorrect,
-    message: isCorrect ? "Police caught correctly" : "Police guessed wrong",
+    isCorrect: guessed && guessed.role === targetRole,
+    message: guessed && guessed.role === targetRole ? "Police caught correctly" : "Police guessed wrong",
   });
 
   io.to(rid).emit("revealRoles", players.map((p) => ({ name: p.name, role: p.role })));

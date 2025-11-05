@@ -115,15 +115,26 @@ const joinRoom = asyncHandler(async (req, res) => {
     return res.status(201).json({ user, room });
 });
 
+
 /**
  * POST /api/rooms/:roomId/start
  * Body: none (only host should call this)
  * -> ensure exactly 4 users, then set gameStatus and start round (currentRound = 1)
  */
+
+// frontend Reminder:  handle the totalRounds be selected by host only from the frontend
 const startGame = asyncHandler(async (req, res) => {
-    const { roomId } = req.params;
+    const { roomId, totalRounds } = req.params;
+
+    // validate roomId
     if (!mongoose.Types.ObjectId.isValid(roomId)) {
         return res.status(400).json({ message: "Invalid roomId" });
+    }
+
+    // validate totalRounds (must be positive integer)
+    const rounds = parseInt(totalRounds, 10);
+    if (Number.isNaN(rounds) || rounds <= 0) {
+        return res.status(400).json({ message: "Invalid totalRounds - must be a positive integer" });
     }
 
     const room = await GameRoom.findById(roomId);
@@ -139,17 +150,17 @@ const startGame = asyncHandler(async (req, res) => {
         return res.status(400).json({ message: "Need exactly 4 players to start the game" });
     }
 
+    // set game in progress and assign totalRounds from params
     room.gameStatus = "in_progress";
     room.currentRound = 1;
-    room.currentInstruction = ["Find Chor", "Find Dakat"][Math.floor(Math.random() * 2)];
+    room.totalRounds = rounds;
     await room.save();
 
     // emit to room that game started
     const io = req.app.get("io");
-    io.to(roomId).emit("gameStarted", { roomId, currentRound: room.currentRound });
+    io.to(roomId).emit("gameStarted", { roomId, currentRound: room.currentRound, totalRounds: room.totalRounds });
 
     // start round manager which will handle role assignment, timers and emissions
-    // use startRoomLoop from utils/roundManager.js
     if (typeof startRoomLoop === "function") {
         startRoomLoop(roomId, io).catch((err) => console.error("round manager start error:", err));
     }

@@ -65,72 +65,7 @@ GameRoomSchema.index({ gameStatus: 1, expiresAt: 1 });
 GameRoomSchema.index({ roomCode: 1 }, { unique: true });
 
 
-/**
- * Assign roles to all players in the room
- */
-GameRoomSchema.methods.assignRoles = async function () {
 
-  const users = await User.find({ roomId: this._id }).sort({ joinedAt: 1 });
-
-  if (users.length !== 4) {
-    throw new Error("Need exactly 4 players to assign roles");
-  }
-
-  // Shuffle roles
-  const roles = ["King", "Police", "Chor", "Dakat"];
-  const shuffledRoles = roles.sort(() => Math.random() - 0.5);
-
-  // Assign roles to users
-  const updates = users.map((user, index) =>
-    User.findByIdAndUpdate(user._id, { role: shuffledRoles[index] })
-  );
-
-  await Promise.all(updates);
-
-  return shuffledRoles;
-};
-
-/**
- * Advance to next round
- */
-GameRoomSchema.methods.advanceRound = async function () {
-  if (this.currentRound >= this.totalRounds) {
-    this.gameStatus = "finished";
-    this.currentInstruction = null;
-  } else {
-    this.currentRound += 1;
-    // Assign new random instruction
-    this.currentInstruction = ["Find Chor", "Find Dakat"][
-      Math.floor(Math.random() * 2)
-    ];
-    
-    // Reassign roles for new round
-    await this.assignRoles();
-  }
-  
-  return await this.save();
-};
-
-// Get current leaderboard
-
-GameRoomSchema.methods.getLeaderboard = async function () {
-
-  return await User.find({ roomId: this._id })
-    .sort({ score: -1, name: 1 })
-    .select("name score role")
-    .lean();
-};
-
-/**
- * Reset all player scores
- */
-GameRoomSchema.methods.resetScores = async function () {
-
-  await User.updateMany(
-    { roomId: this._id },
-    { $set: { score: 0, role: null } }
-  );
-};
 
 /**
  * Cleanup when room is removed

@@ -62,44 +62,7 @@ const UserSchema = new mongoose.Schema(
 UserSchema.index({ roomId: 1, isHost: 1 });
 UserSchema.index({ socketId: 1 }, { sparse: true });
 
-/**
- * Increment user's score
- */
-UserSchema.methods.incrementScore = async function (points) {
-  this.score += points;
-  return await this.save();
-};
 
-/**
- * Reset user's game state
- */
-UserSchema.methods.resetGameState = async function () {
-  this.role = null;
-  this.score = 0;
-  return await this.save();
-};
-
-/**
- * Assign role to user
- */
-UserSchema.methods.assignRole = async function (role) {
-  this.role = role;
-  return await this.save();
-};
-
-/**
- * Find all users in a room
- */
-UserSchema.statics.findByRoom = async function (roomId) {
-  return await this.find({ roomId }).sort({ joinedAt: 1 });
-};
-
-/**
- * Get user by role in a room
- */
-UserSchema.statics.findByRoleInRoom = async function (roomId, role) {
-  return await this.findOne({ roomId, role });
-};
 
 // Generate JWT token for host access
 UserSchema.methods.generateHostAccessToken = function () {

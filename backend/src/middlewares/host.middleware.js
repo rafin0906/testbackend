@@ -11,7 +11,7 @@ export const verifyHost = asyncHandler(async (req, _, next) => {
             req.header("Authorization")?.replace("Bearer ", "");
 
         if (!token) {
-            throw new ApiError(401, "Host token missing");
+            throw new ApiError(401, "Only Host can start the game");
         }
 
         //  Verify JWT

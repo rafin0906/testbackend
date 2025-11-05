@@ -36,7 +36,8 @@ const RoundSchema = new mongoose.Schema(
     guessedUserId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      required: false,
+      default: null,
     },
     // Target role for this round
     targetRole: {
@@ -98,6 +99,5 @@ const RoundSchema = new mongoose.Schema(
 
 // Compound unique index
 RoundSchema.index({ roomId: 1, roundNumber: 1 }, { unique: true });
-
 
 export const Round = mongoose.model("Round", RoundSchema);
