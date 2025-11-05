@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 dotenv.config({
-    path: "./.env",
+  path: "./.env",
 });
 
 import http from "http";
@@ -22,6 +22,9 @@ async function start() {
       methods: ["GET", "POST"],
     },
   });
+
+  // make io available in controllers: req.app.get('io')
+  app.set("io", io);
 
   // wire up your socket handlers
   socketHandler(io);

@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { User } from "../models/user.model.js";
 import { GameRoom } from "../models/game-room.model.js";
+import { startRoomLoop } from "./gamePlay.controller.js";
 
 /** small helper to generate readable 6-char room codes */
 function generateRoomCode() {
@@ -120,10 +121,11 @@ const joinRoom = asyncHandler(async (req, res) => {
  * -> ensure exactly 4 users, then set gameStatus and start round (currentRound = 1)
  */
 const startGame = asyncHandler(async (req, res) => {
-    const { roomId } = req.params; // from frontend i have to send roomId in params 
+    const { roomId } = req.params;
     if (!mongoose.Types.ObjectId.isValid(roomId)) {
         return res.status(400).json({ message: "Invalid roomId" });
     }
+
     const room = await GameRoom.findById(roomId);
     if (!room) {
         return res.status(404).json({ message: "Room not found" });
@@ -131,16 +133,26 @@ const startGame = asyncHandler(async (req, res) => {
     if (room.gameStatus !== "waiting") {
         return res.status(400).json({ message: "Game already started or finished" });
     }
-    const playerCount = await User.countDocuments({ roomId: room._id });
 
+    const playerCount = await User.countDocuments({ roomId: room._id });
     if (playerCount !== 4) {
         return res.status(400).json({ message: "Need exactly 4 players to start the game" });
     }
-    // starting the game
+
     room.gameStatus = "in_progress";
     room.currentRound = 1;
     room.currentInstruction = ["Find Chor", "Find Dakat"][Math.floor(Math.random() * 2)];
     await room.save();
+
+    // emit to room that game started
+    const io = req.app.get("io");
+    io.to(roomId).emit("gameStarted", { roomId, currentRound: room.currentRound });
+
+    // start round manager which will handle role assignment, timers and emissions
+    // use startRoomLoop from utils/roundManager.js
+    if (typeof startRoomLoop === "function") {
+        startRoomLoop(roomId, io).catch((err) => console.error("round manager start error:", err));
+    }
 
     return res.status(200).json({ room });
 });
