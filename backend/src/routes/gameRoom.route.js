@@ -24,6 +24,6 @@ router.route("/:roomCode/players").get(getPlayersByRoomCode);
 // host-check endpoint — protected by verifyHost middleware which reads hostToken cookie
 router.route("/:roomCode/is-host").get(verifyHost, checkIsHost);
 // secured: only host can start the game
-router.route('/:roomId/start').get(verifyHost, startGame);
+router.route('/:roomCode/start/:totalRounds').get(verifyHost, startGame);
 
 export default router;

@@ -7,6 +7,8 @@ export function RoomProvider({ children }) {
   const [roomCode, setRoomCodeState] = useState("");
   const [room, setRoom] = useState(null);
 
+  const [selectedRounds, setSelectedRounds] = useState(null);
+
   const setRoomCode = useCallback((code) => {
     setRoomCodeState(code || "");
   }, []);
@@ -15,7 +17,6 @@ export function RoomProvider({ children }) {
   const loadRoomByCode = useCallback(async (code) => {
     if (!code) return null;
     try {
-      // backend endpoint should return { room }
       const res = await axios.get(`/api/v1/rooms/by-code/${encodeURIComponent(code)}`, { withCredentials: true });
       const serverRoom = res?.data?.room || null;
       if (serverRoom) {
@@ -33,10 +34,22 @@ export function RoomProvider({ children }) {
   const clearRoom = useCallback(() => {
     setRoomCodeState("");
     setRoom(null);
+    setSelectedRounds(null);
   }, []);
 
   return (
-    <RoomContext.Provider value={{ roomCode, room, setRoomCode, loadRoomByCode, clearRoom }}>
+    <RoomContext.Provider
+      value={{
+        roomCode,
+        setRoomCode,
+        room,
+        setRoom,
+        loadRoomByCode,
+        clearRoom,
+        selectedRounds,
+        setSelectedRounds,
+      }}
+    >
       {children}
     </RoomContext.Provider>
   );

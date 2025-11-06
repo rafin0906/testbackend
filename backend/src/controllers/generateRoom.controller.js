@@ -155,11 +155,10 @@ const joinRoom = asyncHandler(async (req, res) => {
 
 // frontend Reminder:  handle the totalRounds be selected by host only from the frontend
 const startGame = asyncHandler(async (req, res) => {
-    const { roomId, totalRounds } = req.params;
+    const { roomCode, totalRounds } = req.params;
 
-    // validate roomId
-    if (!mongoose.Types.ObjectId.isValid(roomId)) {
-        return res.status(400).json({ message: "Invalid roomId" });
+    if (!roomCode) {
+        return res.status(400).json({ message: "roomCode is required" });
     }
 
     // validate totalRounds (must be positive integer)
@@ -168,7 +167,8 @@ const startGame = asyncHandler(async (req, res) => {
         return res.status(400).json({ message: "Invalid totalRounds - must be a positive integer" });
     }
 
-    const room = await GameRoom.findById(roomId);
+    // find room by roomCode
+    const room = await GameRoom.findOne({ roomCode });
     if (!room) {
         return res.status(404).json({ message: "Room not found" });
     }
@@ -187,13 +187,20 @@ const startGame = asyncHandler(async (req, res) => {
     room.totalRounds = rounds;
     await room.save();
 
-    // emit to room that game started
+    // emit to socket room identified by roomCode
     const io = req.app.get("io");
-    io.to(roomId).emit("gameStarted", { roomId, currentRound: room.currentRound, totalRounds: room.totalRounds });
+    if (io) {
+        io.to(String(room.roomCode)).emit("gameStarted", {
+            roomCode: room.roomCode,
+            currentRound: room.currentRound,
+            totalRounds: room.totalRounds,
+        });
+    }
 
     // start round manager which will handle role assignment, timers and emissions
     if (typeof startRoomLoop === "function") {
-        startRoomLoop(roomId, io).catch((err) => console.error("round manager start error:", err));
+        // startRoomLoop expects the DB _id for the room
+        startRoomLoop(room._id, io).catch((err) => console.error("round manager start error:", err));
     }
 
     return res.status(200).json({ room });
