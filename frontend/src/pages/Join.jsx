@@ -4,9 +4,9 @@ import RoomCodeInput from "../components/join/RoomCodeInput";
 import JoinButton from "../components/join/JoinButton";
 import BackArrow from "../components/utility/BackArrow";
 
-
 export default function Join() {
     const [roomCode, setRoomCode] = useState("");
+    const [nickname, setNickname] = useState("");
 
     return (
         <div
@@ -20,10 +20,11 @@ export default function Join() {
                     type="text"
                     placeholder="Enter your Nickname"
                     className="w-full mt-4 max-w-sm px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                    onChange={(e) => onNicknameChange && onNicknameChange(e.target.value)}
+                    value={nickname}
+                    onChange={(e) => setNickname(e.target.value)}
                 />
                 <RoomCodeInput value={roomCode} onChange={(e) => setRoomCode(e.target.value)} />
-                <JoinButton roomCode={roomCode} />
+                <JoinButton roomCode={roomCode} nickname={nickname} />
             </div>
         </div>
     );
