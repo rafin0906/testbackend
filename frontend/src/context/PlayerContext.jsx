@@ -1,55 +1,26 @@
 import { createContext, useContext, useState } from "react";
 
-const defaultSlots = [
+const defaultPlayers = [
   { name: "", isHost: false },
   { name: "", isHost: false },
   { name: "", isHost: false },
   { name: "", isHost: false },
 ];
 
-// provide safe defaults so usePlayers() won't be undefined if provider is missing
-const PlayerContext = createContext({
-  players: defaultSlots,
-  setPlayers: () => {},
-  setPlayerAt: () => {},
-  addOrUpdatePlayer: () => {},
-  resetPlayers: () => {},
-});
+const PlayerContext = createContext(null);
 
 export function PlayerProvider({ children }) {
-  const [players, setPlayers] = useState(defaultSlots);
-
-  const setPlayerAt = (index, player) => {
-    setPlayers((prev) => {
-      const next = prev.slice();
-      next[index] = { ...next[index], ...player };
-      return next;
-    });
-  };
-
-  const addOrUpdatePlayer = (player) => {
-    setPlayers((prev) => {
-      const next = prev.slice();
-      const idx = next.findIndex((p) => p.name && player.name && p.name === player.name);
-      if (idx !== -1) {
-        next[idx] = { ...next[idx], ...player };
-        return next;
-      }
-      const empty = next.findIndex((p) => !p.name);
-      if (empty !== -1) {
-        next[empty] = { ...next[empty], ...player };
-      }
-      return next;
-    });
-  };
-
-  const resetPlayers = () => setPlayers(defaultSlots);
+  const [players, setPlayers] = useState(defaultPlayers);
 
   return (
-    <PlayerContext.Provider value={{ players, setPlayers, setPlayerAt, addOrUpdatePlayer, resetPlayers }}>
+    <PlayerContext.Provider value={{ players, setPlayers }}>
       {children}
     </PlayerContext.Provider>
   );
 }
 
-export const usePlayers = () => useContext(PlayerContext);
+export const usePlayers = () => {
+  const ctx = useContext(PlayerContext);
+  if (!ctx) throw new Error("usePlayers must be used within a PlayerProvider");
+  return ctx;
+};

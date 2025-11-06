@@ -1,19 +1,15 @@
 import { useNavigate } from "react-router-dom";
 import { useRoom } from "../../context/RoomContext";
 import { usePlayers } from "../../context/PlayerContext";
-import { useSocket } from "../../context/SocketContext";
 import { useState } from "react";
 import axios from "axios";
 
 export default function CreateJoinButtons() {
   const navigate = useNavigate();
+
   const { setRoomCode } = useRoom();
+  const { setPlayers } = usePlayers();
 
-  // safe access to PlayerContext (avoid destructure error when provider missing)
-  const playersCtx = usePlayers();
-  const setPlayers = playersCtx?.setPlayers ?? (() => {});
-
-  const { setRegisterData } = useSocket();
   const [nickname, setNickname] = useState("");
   const [showError, setShowError] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -42,7 +38,7 @@ export default function CreateJoinButtons() {
       // set roomCode in context for other pages
       setRoomCode(room.roomCode);
 
-      // use setPlayers safely (no-op if provider not mounted)
+
       setPlayers([
         { name: host.name || nickname, isHost: true },
         { name: "", isHost: false },
@@ -50,10 +46,9 @@ export default function CreateJoinButtons() {
         { name: "", isHost: false },
       ]);
 
-      // tell SocketContext to connect & register this host socket with server (use DB room._id)
-      setRegisterData({ userId: host._id, roomId: room._id });
 
-      // navigate host to lobby using roomCode
+
+   
       navigate(`/lobby/${room.roomCode}`);
     } catch (err) {
       console.error("Create room failed:", err);
