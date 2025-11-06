@@ -38,18 +38,16 @@ export default function CreateJoinButtons() {
       // set roomCode in context for other pages
       setRoomCode(room.roomCode);
 
-
+      // set players including host id
       setPlayers([
-        { name: host.name || nickname, isHost: true },
-        { name: "", isHost: false },
-        { name: "", isHost: false },
-        { name: "", isHost: false },
+        { id: host._id || "", name: host.name || nickname, isHost: true },
+        { id: "", name: "", isHost: false },
+        { id: "", name: "", isHost: false },
+        { id: "", name: "", isHost: false },
       ]);
 
-
-
-   
-      navigate(`/lobby/${room.roomCode}`);
+      // navigate with userId so Lobby can register socket
+      navigate(`/lobby/${room.roomCode}`, { state: { nickname, userId: host._id } });
     } catch (err) {
       console.error("Create room failed:", err);
       setShowError(true);

@@ -16,27 +16,27 @@ function generateRoomCode() {
 // =============================================
 // GET /api/v1/rooms/by-code/:roomCode
 const getRoomByCode = asyncHandler(async (req, res) => {
-  const { roomCode } = req.params;
-  if (!roomCode) return res.status(400).json({ message: "roomCode is required" });
+    const { roomCode } = req.params;
+    if (!roomCode) return res.status(400).json({ message: "roomCode is required" });
 
-  const room = await GameRoom.findOne({ roomCode });
-  if (!room) return res.status(404).json({ message: "Room not found" });
+    const room = await GameRoom.findOne({ roomCode });
+    if (!room) return res.status(404).json({ message: "Room not found" });
 
-  return res.status(200).json({ room });
+    return res.status(200).json({ room });
 });
 // =============================================
 
 
 // GET /api/v1/rooms/:roomCode/players
 const getPlayersByRoomCode = asyncHandler(async (req, res) => {
-  const { roomCode } = req.params;
-  if (!roomCode) return res.status(400).json({ message: "roomCode is required" });
+    const { roomCode } = req.params;
+    if (!roomCode) return res.status(400).json({ message: "roomCode is required" });
 
-  const room = await GameRoom.findOne({ roomCode });
-  if (!room) return res.status(404).json({ message: "Room not found" });
+    const room = await GameRoom.findOne({ roomCode });
+    if (!room) return res.status(404).json({ message: "Room not found" });
 
-  const players = await User.find({ roomId: room._id }).select("_id name isHost role socketId score avatar");
-  return res.status(200).json({ players });
+    const players = await User.find({ roomId: room._id }).select("_id name isHost role socketId score avatar");
+    return res.status(200).json({ players });
 });
 
 
@@ -94,17 +94,6 @@ const createRoom = asyncHandler(async (req, res) => {
         console.error("Host token generation failed:", err);
     }
 
-    // Emit initial player list (host only right now). Use room._id as socket room id.
-    try {
-        const io = req.app.get("io");
-        if (io) {
-            const players = await User.find({ roomId: room._id }).select("_id name isHost");
-            io.to(String(room._id)).emit("playerList", players);
-        }
-    } catch (emitErr) {
-        console.error("emit playerList failed:", emitErr);
-    }
-
 
     const options = {
         httpOnly: true,
@@ -152,17 +141,7 @@ const joinRoom = asyncHandler(async (req, res) => {
         isHost: false,
     });
 
-    // Emit updated player list and a simple playerJoined event
-    try {
-        const io = req.app.get("io");
-        if (io) {
-            const players = await User.find({ roomId: room._id }).select("_id name isHost");
-            io.to(String(room._id)).emit("playerJoined", { _id: user._id, name: user.name, isHost: user.isHost });
-            io.to(String(room._id)).emit("playerList", players);
-        }
-    } catch (emitErr) {
-        console.error("emit after join failed:", emitErr);
-    }
+
 
     return res.status(201).json({ user, room });
 });

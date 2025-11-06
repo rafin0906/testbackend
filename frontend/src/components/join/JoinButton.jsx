@@ -40,22 +40,21 @@ export default function JoinButton({ roomCode: propRoomCode, nickname: propNickn
         throw new Error("Invalid response from server");
       }
 
-      // persist roomCode in context (so other pages can read it)
+      // persist roomCode in context
       setRoomCode(room.roomCode);
 
-      // update players context: place joined user in first empty slot
+      // update players context: place joined user in first empty slot and include id
       setPlayers((prev = []) => {
         const next = Array.isArray(prev) ? prev.slice() : [];
-        // ensure 4 slots
-        while (next.length < 4) next.push({ name: "", isHost: false });
+        while (next.length < 4) next.push({ id: "", name: "", isHost: false });
         const emptyIdx = next.findIndex((p) => !p || !p.name);
         const targetIdx = emptyIdx !== -1 ? emptyIdx : next.length - 1;
-        next[targetIdx] = { name: user.name || nickname, isHost: user.isHost || false };
+        next[targetIdx] = { id: user._id || "", name: user.name || nickname, isHost: user.isHost || false };
         return next;
       });
 
-      // navigate to lobby
-      navigate(`/lobby/${room.roomCode}`, { state: { nickname } });
+      // navigate to lobby and pass userId so Lobby can register socket
+      navigate(`/lobby/${room.roomCode}`, { state: { nickname, userId: user._id } });
     } catch (err) {
       console.error("Join room failed:", err);
       setError(err?.response?.data?.message || "Failed to join room");

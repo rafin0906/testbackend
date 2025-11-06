@@ -5,7 +5,7 @@ import { RoomProvider } from './context/RoomContext';
 import { PlayerProvider } from './context/PlayerContext';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
+  
     <PlayerProvider>
       <RoomProvider>
 
@@ -13,5 +13,5 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         
       </RoomProvider>
     </PlayerProvider>
-  </React.StrictMode>
+ 
 );

@@ -10,6 +10,7 @@ import app from "./app.js";
 import socketHandler from "./utils/socketHandler.js";
 
 const PORT = process.env.PORT || 8000;
+const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:5173";
 
 async function start() {
   await connectDB();
@@ -18,7 +19,7 @@ async function start() {
 
   const io = new Server(httpServer, {
     cors: {
-      origin: process.env.CORS_ORIGIN || "*",
+      origin: CLIENT_ORIGIN,
       methods: ["GET", "POST"],
       credentials: true,
     },

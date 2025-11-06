@@ -15,7 +15,6 @@ export function RoomProvider({ children }) {
   const loadRoomByCode = useCallback(async (code) => {
     if (!code) return null;
     try {
-      console.log("here");
       // backend endpoint should return { room }
       const res = await axios.get(`/api/v1/rooms/by-code/${encodeURIComponent(code)}`, { withCredentials: true });
       const serverRoom = res?.data?.room || null;
