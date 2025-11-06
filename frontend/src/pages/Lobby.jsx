@@ -2,11 +2,10 @@ import BackArrow from "../components/utility/BackArrow";
 import TitleBanner from "../components/lobby/TitleBanner";
 import PlayerList from "../components/lobby/PlayerList";
 import RoundSelector from "../components/lobby/RoundSelector";
-import StartButton from "../components/lobby/StartButton";
 import RoomCodeBox from "../components/lobby/RoomCodeBox";
 
 import { useEffect, useRef } from "react";
-import { useParams, useLocation } from "react-router-dom";
+import { useParams, useLocation,useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import { useRoom } from "../context/RoomContext";
 import { usePlayers } from "../context/PlayerContext";
@@ -21,7 +20,7 @@ export default function Lobby() {
 
     useEffect(() => {
         const code = paramRoomCode || location.state?.roomCode || null;
-        console.log("Lobby useEffect code:", code);
+        // console.log("Lobby useEffect code:", code);
         if (!code) return;
 
         let mounted = true;
@@ -43,10 +42,10 @@ export default function Lobby() {
                 socketRef.current = socket;
 
                 socket.on("connect", () => {
-                    console.log("socket connected:", socket.id);
+                    // console.log("socket connected:", socket.id);
                     // register this socket to a user on the server so server can map socketId -> user
                     const userId = location.state?.userId;
-                    console.log("registering socket with userId:", userId);
+                    // console.log("registering socket with userId:", userId);
                     if (userId) {
                         socket.emit("register", { userId, roomCode: code });
                     } else {
@@ -57,7 +56,7 @@ export default function Lobby() {
                 // receive updated player list from server (if implemented)
                 socket.on("playerList", (data) => {
                     if (!mounted) return;
-                    console.log("playerList payload:", data);
+                    // console.log("playerList payload:", data);
 
                     // accept either an array or an object with .players
                     const list = Array.isArray(data) ? data : Array.isArray(data?.players) ? data.players : null;
@@ -72,18 +71,18 @@ export default function Lobby() {
                     while (mapped.length < 4) mapped.push({ id: "", name: "", isHost: false });
 
                     setPlayers(mapped);
-                    console.log("mapped players:", mapped);
+                    // console.log("mapped players:", mapped);
                 });
 
                 // optional: handle other realtime events if needed
                 socket.on("roundStarted", (payload) => {
-                    console.log("roundStarted", payload);
+                    // console.log("roundStarted", payload);
                 });
                 socket.on("policeInstruction", (payload) => {
-                    console.log("policeInstruction", payload);
+                    // console.log("policeInstruction", payload);
                 });
                 socket.on("disconnect", (reason) => {
-                    console.log("socket disconnected:", reason);
+                    // console.log("socket disconnected:", reason);
                 });
             }
         })();
@@ -98,6 +97,11 @@ export default function Lobby() {
         };
     }, [paramRoomCode, location.state?.roomCode, loadRoomByCode, loadPlayersByRoomCode, setRoomCode, setPlayers]);
 
+    const navigate = useNavigate();
+    const handleStart = () => {
+    navigate("/game")
+  }
+
     return (
         <div
             className="min-h-screen relative flex items-center justify-center bg-[#FFFDE7] bg-cover"
@@ -109,7 +113,9 @@ export default function Lobby() {
                 <PlayerList />
                 <RoundSelector />
                 <RoomCodeBox />
-                <StartButton />
+                <button className="mt-4 bg-yellow-400 hover:bg-yellow-500 py-2 px-8 rounded-md shadow-md font-bold text-black font-[Sunflower] transition" onClick={handleStart}>
+                    Start Game
+                </button>
             </div>
         </div>
     );

@@ -199,4 +199,20 @@ const startGame = asyncHandler(async (req, res) => {
     return res.status(200).json({ room });
 });
 
-export { createRoom, joinRoom, startGame, getRoomByCode, getPlayersByRoomCode };
+// Host verification route (uses verifyHost middleware in router)
+const checkIsHost = asyncHandler(async (req, res) => {
+    // req.hostId and req.roomId are set by verifyHost middleware
+    const { roomCode } = req.params;
+    const room = await GameRoom.findOne({ roomCode });
+    if (!room) return res.status(404).json({ message: "Room not found" });
+
+    // If middleware didn't attach host info, respond unauthorized
+    if (!req.hostId) return res.status(401).json({ isHost: false });
+
+    const isHost = String(req.hostId) === String(room.hostId) || String(req.roomId) === String(room._id);
+    if (!isHost) return res.status(403).json({ isHost: false });
+
+    return res.status(200).json({ isHost: true, hostId: req.hostId });
+});
+
+export { createRoom, joinRoom, startGame, getRoomByCode, getPlayersByRoomCode, checkIsHost };

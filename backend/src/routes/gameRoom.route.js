@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { createRoom, joinRoom, startGame, getRoomByCode, getPlayersByRoomCode } from '../controllers/generateRoom.controller.js';
 import { verifyHost } from '../middlewares/host.middleware.js';
-
+import { checkIsHost } from '../controllers/generateRoom.controller.js';
 const router = Router();
 
 router.route('/generate-room').post(createRoom);
@@ -21,6 +21,8 @@ router.route("/:roomCode/players").get(getPlayersByRoomCode);
 
 
 
+// host-check endpoint — protected by verifyHost middleware which reads hostToken cookie
+router.route("/:roomCode/is-host").get(verifyHost, checkIsHost);
 // secured: only host can start the game
 router.route('/:roomId/start').get(verifyHost, startGame);
 
