@@ -113,13 +113,24 @@ const startRound = async (roomIdentifier, io) => {
     }
   });
 
+  // find who is King this round and prepare payload info
+  const kingPlayer = freshPlayers.find((p) => p.role === "King");
+  const kingPayload = kingPlayer ? { id: kingPlayer._id.toString(), name: kingPlayer.name } : null;
+
+
   const instruction = Math.random() > 0.5 ? "Find Chor" : "Find Dakat";
   room.currentInstruction = instruction;
   await room.save();
 
   // emit to socket room identified by roomCode
   console.log("Emitting roundStarted for roomCode:", socketRoomKey);
-  ioLocal.to(socketRoomKey).emit("roundStarted", { roundNumber: room.currentRound, instruction, time: 15 });
+   // include king info so clients can highlight the King in the UI
+   ioLocal.to(socketRoomKey).emit("roundStarted", {
+     roundNumber: room.currentRound,
+     instruction,
+     time: 15,
+     king: kingPayload,
+   });
 
   const policePlayer = freshPlayers.find((p) => p.role === "Police");
   const state = {

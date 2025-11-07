@@ -26,6 +26,7 @@ const GamePage = () => {
   const [totalTime, setTotalTime] = useState(null);
   const [roundNumber, setRoundNumber] = useState(null);
   const [instruction, setInstruction] = useState(null);
+  const [kingId, setKingId] = useState(null);
 
   // new UI states for role, private instruction, and round/game events
   const [myRole, setMyRole] = useState(null);
@@ -98,6 +99,8 @@ const GamePage = () => {
       setTotalTime(seconds);
       setRoundNumber(payload?.roundNumber ?? null);
       setInstruction(payload?.instruction ?? null);
+      // accept king info from server
+      setKingId(payload?.king?.id || payload?.kingId || null);
       setPrivateInstruction(null); // reset private instruction each round
       setRoundResultMessage(null);
       setTimeLeft(seconds);
@@ -233,7 +236,10 @@ const GamePage = () => {
   const playersForGrid = Array.from({ length: 4 }).map((_, idx) => {
     const p = Array.isArray(players) && players[idx] ? players[idx] : { id: "", name: "", isHost: false };
     const baseName = p.name && p.name.trim() ? p.name : `Waiting ${idx + 1}`;
-    const displayName = p.isHost ? `${baseName} (Host)` : baseName;
+    // append badges for host and king
+    let displayName = baseName;
+    if (p.isHost) displayName += " (Host)";
+    if (p.id && kingId && p.id === kingId) displayName += " (King)";
     return {
       id: p.id || "",
       name: displayName,
