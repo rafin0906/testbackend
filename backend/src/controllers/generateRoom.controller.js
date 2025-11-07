@@ -3,6 +3,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { User } from "../models/user.model.js";
 import { GameRoom } from "../models/game-room.model.js";
 import { startRoomLoop } from "./gamePlay.controller.js";
+import { getIO } from "../utils/socket.js"; // <-- new import
 
 /** small helper to generate readable 6-char room codes */
 function generateRoomCode() {
@@ -187,8 +188,15 @@ const startGame = asyncHandler(async (req, res) => {
     room.totalRounds = rounds;
     await room.save();
 
-    // emit to socket room identified by roomCode
-    const io = req.app.get("io");
+    // emit to socket room identified by roomCode using shared getIO()
+    let io = null;
+    try {
+        io = getIO();
+    } catch (err) {
+        console.error("Socket.IO not initialized:", err);
+        io = null;
+    }
+
     if (io) {
         io.to(String(room.roomCode)).emit("gameStarted", {
             roomCode: room.roomCode,
@@ -199,8 +207,8 @@ const startGame = asyncHandler(async (req, res) => {
 
     // start round manager which will handle role assignment, timers and emissions
     if (typeof startRoomLoop === "function") {
-        // pass the roomCode so the round loop and emits consistently use the roomCode socket room
-        startRoomLoop(room.roomCode, io).catch((err) => console.error("round manager start error:", err));
+        // startRoomLoop no longer requires io param — it should use getIO() internally
+        startRoomLoop(room.roomCode).catch((err) => console.error("round manager start error:", err));
     }
 
     return res.status(200).json({ room });

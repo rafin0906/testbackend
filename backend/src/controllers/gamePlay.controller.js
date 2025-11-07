@@ -3,6 +3,7 @@ import { GameRoom } from "../models/game-room.model.js";
 import { User } from "../models/user.model.js";
 import { Round } from "../models/rounds.model.js";
 import mongoose from "mongoose";
+import { getIO } from "../utils/socket.js"; // <-- use shared IO
 
 const roomState = new Map(); // roomId (string DB _id) -> { timer, activeRoundNumber, policeId, instruction, resolved }
 
@@ -33,6 +34,16 @@ const resolveRoom = async (identifier) => {
  * Compute leaderboard and winners (handles ties), then emit via io
  */
 const computeAndBroadcastWinner = async (roomIdentifier, io) => {
+  let ioLocal = io;
+  if (!ioLocal) {
+    try {
+      ioLocal = getIO();
+    } catch (err) {
+      console.error("Socket.IO not initialized in computeAndBroadcastWinner:", err);
+      return null;
+    }
+  }
+
   const room = await resolveRoom(roomIdentifier);
   if (!room) return null;
   const rid = String(room._id);
@@ -45,11 +56,23 @@ const computeAndBroadcastWinner = async (roomIdentifier, io) => {
   const topScore = leaderboard[0].score || 0;
   const winners = leaderboard.filter((p) => p.score === topScore);
 
-  io.to(socketRoomKey).emit("gameWinner", { winners, leaderboard });
+  console.log("Emitting gameWinner to:", socketRoomKey);
+  ioLocal.to(socketRoomKey).emit("gameWinner", { winners, leaderboard });
   return { winners, leaderboard };
 };
 
 const startRound = async (roomIdentifier, io) => {
+  let ioLocal = io;
+  if (!ioLocal) {
+    try {
+            console.log("params io is null, getting IO from getIO");
+      ioLocal = getIO();
+    } catch (err) {
+      console.error("Socket.IO not initialized in startRound:", err);
+      return;
+    }
+  }
+
   const room = await resolveRoom(roomIdentifier);
   if (!room || room.gameStatus !== "in_progress") return;
 
@@ -64,14 +87,15 @@ const startRound = async (roomIdentifier, io) => {
     if (st0?.timer) clearTimeout(st0.timer);
     roomState.delete(rid);
 
-    io.to(socketRoomKey).emit("gameFinished");
-    await computeAndBroadcastWinner(rid, io);
+    console.log("Emitting gameFinished to:", socketRoomKey);
+    ioLocal.to(socketRoomKey).emit("gameFinished");
+    await computeAndBroadcastWinner(rid, ioLocal);
     return;
   }
 
   const players = await User.find({ roomId: rid }).select("_id name socketId role");
   if (players.length !== 4) {
-    io.to(socketRoomKey).emit("error", { message: "Need 4 players to continue" });
+    ioLocal.to(socketRoomKey).emit("error", { message: "Need 4 players to continue" });
     return;
   }
 
@@ -85,7 +109,7 @@ const startRound = async (roomIdentifier, io) => {
   const freshPlayers = await User.find({ roomId: rid }).select("_id name role socketId");
   freshPlayers.forEach((p) => {
     if (p.socketId) {
-      io.to(p.socketId).emit("yourRole", { role: p.role });
+      ioLocal.to(p.socketId).emit("yourRole", { role: p.role });
     }
   });
 
@@ -94,8 +118,9 @@ const startRound = async (roomIdentifier, io) => {
   await room.save();
 
   // emit to socket room identified by roomCode
-  io.to(socketRoomKey).emit("roundStarted", { roundNumber: room.currentRound, instruction, time: 15 });
-  console.log("Emitted roundStarted for roomCode:", socketRoomKey);
+  console.log("Emitting roundStarted for roomCode:", socketRoomKey);
+  ioLocal.to(socketRoomKey).emit("roundStarted", { roundNumber: room.currentRound, instruction, time: 15 });
+
   const policePlayer = freshPlayers.find((p) => p.role === "Police");
   const state = {
     activeRoundNumber: room.currentRound,
@@ -107,16 +132,26 @@ const startRound = async (roomIdentifier, io) => {
   roomState.set(rid, state);
 
   if (policePlayer && policePlayer.socketId) {
-    io.to(policePlayer.socketId).emit("policeInstruction", { instruction });
+    ioLocal.to(policePlayer.socketId).emit("policeInstruction", { instruction });
   }
 
   state.timer = setTimeout(async () => {
     if (state.resolved) return;
-    await finalizeRoundAsNoGuess(rid, io);
+    await finalizeRoundAsNoGuess(rid, ioLocal);
   }, 15000);
 };
 
 const finalizeRoundAsNoGuess = async (roomIdentifier, io) => {
+  let ioLocal = io;
+  if (!ioLocal) {
+    try {
+      ioLocal = getIO();
+    } catch (err) {
+      console.error("Socket.IO not initialized in finalizeRoundAsNoGuess:", err);
+      return;
+    }
+  }
+
   const room = await resolveRoom(roomIdentifier);
   if (!room) return;
   const rid = String(room._id);
@@ -170,12 +205,15 @@ const finalizeRoundAsNoGuess = async (roomIdentifier, io) => {
     guessedAt: new Date(),
   });
 
-  io.to(socketRoomKey).emit("roundResult", { success: false, message: "No guess made in time" });
+  console.log("Emitting roundResult (no guess) to:", socketRoomKey);
+  ioLocal.to(socketRoomKey).emit("roundResult", { success: false, message: "No guess made in time" });
 
   const leaderboard = await User.find({ roomId: rid }).sort({ score: -1 }).select("name score role");
-  io.to(socketRoomKey).emit("leaderboard", leaderboard);
+  console.log("Emitting leaderboard to:", socketRoomKey);
+  ioLocal.to(socketRoomKey).emit("leaderboard", leaderboard);
 
-  io.to(socketRoomKey).emit("revealRoles", players.map((p) => ({ name: p.name, role: p.role })));
+  console.log("Emitting revealRoles to:", socketRoomKey);
+  ioLocal.to(socketRoomKey).emit("revealRoles", players.map((p) => ({ name: p.name, role: p.role })));
 
   setTimeout(async () => {
     room.currentRound += 1;
@@ -188,18 +226,31 @@ const finalizeRoundAsNoGuess = async (roomIdentifier, io) => {
     if (room.totalRounds && room.currentRound > room.totalRounds) {
       room.gameStatus = "finished";
       await room.save();
-      io.to(socketRoomKey).emit("gameFinished");
-      await computeAndBroadcastWinner(rid, io);
+      console.log("Emitting gameFinished to:", socketRoomKey);
+      ioLocal.to(socketRoomKey).emit("gameFinished");
+      await computeAndBroadcastWinner(rid, ioLocal);
     } else {
-      await startRound(rid, io);
+      await startRound(rid, ioLocal);
     }
   }, 5000);
 };
 
 const handlePoliceGuess = async (roomIdentifier, policeId, guessedUserId, io, socket) => {
+  let ioLocal = io;
+  if (!ioLocal) {
+    try {
+      ioLocal = getIO();
+    } catch (err) {
+      console.error("Socket.IO not initialized in handlePoliceGuess:", err);
+      // fallback: still use socket to reply with error
+      if (socket) socket.emit("error", { message: "Server socket not initialized" });
+      return;
+    }
+  }
+
   const room = await resolveRoom(roomIdentifier);
   if (!room) {
-    socket.emit("error", { message: "Room not found" });
+    if (socket) socket.emit("error", { message: "Room not found" });
     return;
   }
   const rid = String(room._id);
@@ -208,11 +259,11 @@ const handlePoliceGuess = async (roomIdentifier, policeId, guessedUserId, io, so
   const state = roomState.get(rid);
 
   if (!state || state.resolved) {
-    socket.emit("error", { message: "Round already Finished" });
+    if (socket) socket.emit("error", { message: "Round already Finished" });
     return;
   }
   if (state.policeId !== policeId) {
-    socket.emit("error", { message: "You are not the police for this round" });
+    if (socket) socket.emit("error", { message: "You are not the police for this round" });
     return;
   }
 
@@ -286,14 +337,17 @@ const handlePoliceGuess = async (roomIdentifier, policeId, guessedUserId, io, so
     guessedAt: new Date(),
   });
 
-  io.to(socketRoomKey).emit("roundResult", {
+  console.log("Emitting roundResult (guess) to:", socketRoomKey);
+  ioLocal.to(socketRoomKey).emit("roundResult", {
     isCorrect: guessed && guessed.role === targetRole,
     message: guessed && guessed.role === targetRole ? "Police caught correctly" : "Police guessed wrong",
   });
 
-  io.to(socketRoomKey).emit("revealRoles", players.map((p) => ({ name: p.name, role: p.role })));
+  console.log("Emitting revealRoles to:", socketRoomKey);
+  ioLocal.to(socketRoomKey).emit("revealRoles", players.map((p) => ({ name: p.name, role: p.role })));
   const leaderboard = await User.find({ roomId: rid }).sort({ score: -1 }).select("name score role");
-  io.to(socketRoomKey).emit("leaderboard", leaderboard);
+  console.log("Emitting leaderboard to:", socketRoomKey);
+  ioLocal.to(socketRoomKey).emit("leaderboard", leaderboard);
 
   setTimeout(async () => {
     const roomDoc = await GameRoom.findById(rid);
@@ -306,23 +360,35 @@ const handlePoliceGuess = async (roomIdentifier, policeId, guessedUserId, io, so
     if (roomDoc.totalRounds && roomDoc.currentRound > roomDoc.totalRounds) {
       roomDoc.gameStatus = "finished";
       await roomDoc.save();
-      io.to(socketRoomKey).emit("gameFinished");
-      await computeAndBroadcastWinner(rid, io);
+      console.log("Emitting gameFinished to:", socketRoomKey);
+      ioLocal.to(socketRoomKey).emit("gameFinished");
+      await computeAndBroadcastWinner(rid, ioLocal);
     } else {
       await roomDoc.save();
-      await startRound(rid, io);
+      await startRound(rid, ioLocal);
     }
   }, 5000);
 };
 
 const startRoomLoop = async (roomIdentifier, io) => {
+  let ioLocal = io;
+  if (!ioLocal) {
+    try {
+      ioLocal = getIO();
+    } catch (err) {
+      console.error("Socket.IO not initialized in startRoomLoop:", err);
+      return;
+    }
+  }
+
   // resolve to DB room and then start rounds using DB _id
   const room = await resolveRoom(roomIdentifier);
   if (!room) return;
   const rid = String(room._id);
   if (roomState.has(rid)) return;
-  await startRound(rid, io);
+  await startRound(rid, ioLocal);
 };
 
 // named exports
 export { startRoomLoop, startRound, finalizeRoundAsNoGuess, handlePoliceGuess };
+// ...existing code...

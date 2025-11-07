@@ -4,7 +4,8 @@ dotenv.config({
 });
 
 import http from "http";
-import { Server } from "socket.io";
+// import { Server } from "socket.io";
+import { initSocket } from "./utils/socket.js";
 import connectDB from "./db/index.js";
 import app from "./app.js";
 import socketHandler from "./utils/socketHandler.js";
@@ -17,16 +18,11 @@ async function start() {
 
   const httpServer = http.createServer(app);
 
-  const io = new Server(httpServer, {
-    cors: {
-      origin: CLIENT_ORIGIN,
-      methods: ["GET", "POST"],
-      credentials: true,
-    },
-  });
+  // initialize shared Socket.IO instance
+  const io = initSocket(httpServer); // ✅ global shared instance
 
-  // make io available in controllers: req.app.get('io')
-  app.set("io", io);
+  // optionally keep app.set if other code expects it (not required)
+  // app.set("io", io);
 
   // wire up your socket handlers
   socketHandler(io);

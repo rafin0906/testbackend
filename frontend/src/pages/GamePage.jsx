@@ -27,12 +27,22 @@ const GamePage = () => {
   const [roundNumber, setRoundNumber] = useState(null);
   const [instruction, setInstruction] = useState(null);
 
+  // new UI states for role, private instruction, and round/game events
+  const [myRole, setMyRole] = useState(null);
+  const [privateInstruction, setPrivateInstruction] = useState(null);
+  const [roundResultMessage, setRoundResultMessage] = useState(null);
+  const [gameWinner, setGameWinner] = useState(null);
+
   const socketRef = useRef(null);
   const timerRef = useRef(null);
 
+  // helper to determine current room code and user id (navigation may supply userId)
+  const codeForThis = ctxRoomCode || paramRoomCode || location.state?.roomCode || null;
+  const myUserId = location.state?.userId || null;
+
   // ensure we fetch fresh players from backend on mount / reload
   useEffect(() => {
-    const code = ctxRoomCode || paramRoomCode || location.state?.roomCode || null;
+    const code = codeForThis;
     if (!code) {
       console.warn("GamePage: no roomCode available to load players");
       return;
@@ -43,7 +53,6 @@ const GamePage = () => {
       try {
         await loadPlayersByRoomCode(code);
         if (!mounted) return;
-        // console.log("GamePage: loaded players for roomCode:", code);
       } catch (err) {
         console.error("GamePage: failed to load players:", err);
       }
@@ -52,19 +61,18 @@ const GamePage = () => {
     return () => {
       mounted = false;
     };
-  }, [ctxRoomCode, paramRoomCode, location.state?.roomCode, loadPlayersByRoomCode]);
+  }, [codeForThis, loadPlayersByRoomCode]);
 
   // create socket, join room and listen for round events
   useEffect(() => {
-    const code = ctxRoomCode || paramRoomCode || location.state?.roomCode || null;
+    const code = codeForThis;
     if (!code) return;
 
     const socket = io("http://localhost:8000", { withCredentials: true });
     socketRef.current = socket;
 
     socket.on("connect", () => {
-      // console.log("GamePage socket connected:", socket.id);
-      const navUserId = location.state?.userId;
+      const navUserId = myUserId;
       if (navUserId) {
         socket.emit("register", { userId: navUserId, roomCode: code });
       } else {
@@ -74,7 +82,7 @@ const GamePage = () => {
 
     // start timer when backend announces a new round
     socket.on("roundStarted", (payload) => {
-      console.log("roundStarted payload:", payload);
+      // console.log("roundStarted payload:", payload);
       const seconds =
         typeof payload?.time === "number"
           ? payload.time
@@ -83,6 +91,8 @@ const GamePage = () => {
       setTotalTime(seconds);
       setRoundNumber(payload?.roundNumber ?? null);
       setInstruction(payload?.instruction ?? null);
+      setPrivateInstruction(null); // reset private instruction each round
+      setRoundResultMessage(null);
       setTimeLeft(seconds);
 
       // clear any existing interval
@@ -104,22 +114,71 @@ const GamePage = () => {
       }, 1000);
     });
 
-    // roundResult / gameFinished -> clear timer
-    socket.on("roundResult", () => {
+    // individual role assigned (sent privately to each client)
+    socket.on("yourRole", (payload) => {
+      // console.log("yourRole:", payload);
+      if (payload && payload.role) {
+        setMyRole(payload.role);
+      }
+    });
+
+    // police specific private instruction
+    socket.on("policeInstruction", (payload) => {
+      // console.log("policeInstruction:", payload);
+      setPrivateInstruction(payload?.instruction || null);
+    });
+
+    // round result -> stop timer and optionally show message
+    socket.on("roundResult", (payload) => {
+      // console.log("roundResult:", payload);
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
       setTimeLeft(0);
+      setRoundResultMessage(payload?.message ?? null);
+
+      // refresh players / leaderboard from server so UI reflects new scores
+      if (code) {
+        loadPlayersByRoomCode(code).catch((err) => console.error("Failed reload players:", err));
+      }
     });
 
+    // reveal roles to all in room (may be used to update player UI)
+    socket.on("revealRoles", (payload) => {
+      // console.log("revealRoles:", payload);
+      // payload is array like [{ name, role }, ...] — refresh players to pick up roles/scores
+      if (code) {
+        loadPlayersByRoomCode(code).catch((err) => console.error("Failed reload players:", err));
+      }
+    });
+
+    // leaderboard event -> refresh players
+    socket.on("leaderboard", (payload) => {
+      // console.log("leaderboard event:", payload);
+      if (code) {
+        loadPlayersByRoomCode(code).catch((err) => console.error("Failed reload players:", err));
+      }
+    });
+
+    // game finished / winner
     socket.on("gameFinished", () => {
+      // console.log("gameFinished");
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
       setTimeLeft(null);
       setTotalTime(null);
+    });
+
+    socket.on("gameWinner", (payload) => {
+      // console.log("gameWinner:", payload);
+      setGameWinner(payload ?? null);
+      // refresh players/leaderboard
+      if (code) {
+        loadPlayersByRoomCode(code).catch((err) => console.error("Failed reload players:", err));
+      }
     });
 
     socket.on("disconnect", (reason) => {
@@ -132,16 +191,23 @@ const GamePage = () => {
         timerRef.current = null;
       }
       if (socketRef.current) {
-        socketRef.current.off();
+        socketRef.current.off("roundStarted");
+        socketRef.current.off("yourRole");
+        socketRef.current.off("policeInstruction");
+        socketRef.current.off("roundResult");
+        socketRef.current.off("revealRoles");
+        socketRef.current.off("leaderboard");
+        socketRef.current.off("gameFinished");
+        socketRef.current.off("gameWinner");
         socketRef.current.disconnect();
         socketRef.current = null;
       }
     };
-  }, [ctxRoomCode, paramRoomCode, location.state?.roomCode, location.state?.userId]);
+  }, [codeForThis, myUserId, loadPlayersByRoomCode]);
 
   useEffect(() => {
     if (!Array.isArray(players)) return;
-    // console.log("Player IDs:", players.map((p, i) => ({ slot: i + 1, id: p?.id || "" })));
+    console.log("Player IDs:", players.map((p, i) => ({ slot: i + 1, id: p?.id || "" })));
   }, [players]);
 
   const images = [demo1, demo2, demo3, demo4];
@@ -206,7 +272,7 @@ const GamePage = () => {
 
       {/* Role Card */}
       <div className="flex justify-center mt-16">
-        <RoleCard role={null} description={instruction || ""} />
+        <RoleCard role={myRole} description={privateInstruction || instruction || ""} />
       </div>
 
       {/* LeaderBoard */}
