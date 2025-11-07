@@ -199,8 +199,8 @@ const startGame = asyncHandler(async (req, res) => {
 
     // start round manager which will handle role assignment, timers and emissions
     if (typeof startRoomLoop === "function") {
-        // startRoomLoop expects the DB _id for the room
-        startRoomLoop(room._id, io).catch((err) => console.error("round manager start error:", err));
+        // pass the roomCode so the round loop and emits consistently use the roomCode socket room
+        startRoomLoop(room.roomCode, io).catch((err) => console.error("round manager start error:", err));
     }
 
     return res.status(200).json({ room });

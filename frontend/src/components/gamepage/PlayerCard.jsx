@@ -28,12 +28,8 @@ export default function PlayerCard({ player }) {
               alt={role}
               className="w-4 h-4"
             />
-            <span className="text-xs"
-                        style={{
-                fontFamily: 'LipighorBangla',
-                 fontSize: '1.15rem', 
-            }}
-            >{role}</span>
+            <span className="text-xs">
+              {role}</span>
           </div>
         )}
       </div>

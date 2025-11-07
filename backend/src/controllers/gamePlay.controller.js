@@ -1,8 +1,10 @@
+// ...existing code...
 import { GameRoom } from "../models/game-room.model.js";
 import { User } from "../models/user.model.js";
 import { Round } from "../models/rounds.model.js";
+import mongoose from "mongoose";
 
-const roomState = new Map(); // roomId (string) -> { timer, activeRoundNumber, policeId, instruction, resolved }
+const roomState = new Map(); // roomId (string DB _id) -> { timer, activeRoundNumber, policeId, instruction, resolved }
 
 const shuffleArray = (arr) => {
   const a = arr.slice();
@@ -13,11 +15,29 @@ const shuffleArray = (arr) => {
   return a;
 };
 
+// helper: resolve identifier which can be either ObjectId string or roomCode
+const resolveRoom = async (identifier) => {
+  if (!identifier) return null;
+  let room = null;
+  // treat valid ObjectId as DB id
+  if (mongoose.Types.ObjectId.isValid(String(identifier))) {
+    room = await GameRoom.findById(String(identifier));
+    if (room) return room;
+  }
+  // otherwise try roomCode
+  room = await GameRoom.findOne({ roomCode: String(identifier) });
+  return room;
+};
+
 /**
  * Compute leaderboard and winners (handles ties), then emit via io
  */
-const computeAndBroadcastWinner = async (roomId, io) => {
-  const rid = String(roomId);
+const computeAndBroadcastWinner = async (roomIdentifier, io) => {
+  const room = await resolveRoom(roomIdentifier);
+  if (!room) return null;
+  const rid = String(room._id);
+  const socketRoomKey = String(room.roomCode);
+
   const players = await User.find({ roomId: rid }).select("_id name score").sort({ score: -1, name: 1 });
   if (!players || players.length === 0) return null;
 
@@ -25,14 +45,16 @@ const computeAndBroadcastWinner = async (roomId, io) => {
   const topScore = leaderboard[0].score || 0;
   const winners = leaderboard.filter((p) => p.score === topScore);
 
-  io.to(rid).emit("gameWinner", { winners, leaderboard });
+  io.to(socketRoomKey).emit("gameWinner", { winners, leaderboard });
   return { winners, leaderboard };
 };
 
-const startRound = async (roomId, io) => {
-  const rid = String(roomId);
-  const room = await GameRoom.findById(rid);
+const startRound = async (roomIdentifier, io) => {
+  const room = await resolveRoom(roomIdentifier);
   if (!room || room.gameStatus !== "in_progress") return;
+
+  const rid = String(room._id);
+  const socketRoomKey = String(room.roomCode);
 
   if (room.totalRounds && room.currentRound > room.totalRounds) {
     room.gameStatus = "finished";
@@ -42,22 +64,20 @@ const startRound = async (roomId, io) => {
     if (st0?.timer) clearTimeout(st0.timer);
     roomState.delete(rid);
 
-    io.to(rid).emit("gameFinished");
+    io.to(socketRoomKey).emit("gameFinished");
     await computeAndBroadcastWinner(rid, io);
     return;
   }
 
-  const players = await User.find({ roomId: rid }).select("_id name socketId");
+  const players = await User.find({ roomId: rid }).select("_id name socketId role");
   if (players.length !== 4) {
-    io.to(rid).emit("error", { message: "Need 4 players to continue" });
+    io.to(socketRoomKey).emit("error", { message: "Need 4 players to continue" });
     return;
   }
 
   const roles = shuffleArray(["King", "Police", "Chor", "Dakat"]);
-  const roleAssignments = {};
   await Promise.all(
     players.map((p, i) => {
-      roleAssignments[roles[i]] = p._id;
       return User.updateOne({ _id: p._id }, { $set: { role: roles[i] } });
     })
   );
@@ -73,8 +93,9 @@ const startRound = async (roomId, io) => {
   room.currentInstruction = instruction;
   await room.save();
 
-  io.to(rid).emit("roundStarted", { roundNumber: room.currentRound, instruction, time: 15 });
-
+  // emit to socket room identified by roomCode
+  io.to(socketRoomKey).emit("roundStarted", { roundNumber: room.currentRound, instruction, time: 15 });
+  console.log("Emitted roundStarted for roomCode:", socketRoomKey);
   const policePlayer = freshPlayers.find((p) => p.role === "Police");
   const state = {
     activeRoundNumber: room.currentRound,
@@ -95,8 +116,12 @@ const startRound = async (roomId, io) => {
   }, 15000);
 };
 
-const finalizeRoundAsNoGuess = async (roomId, io) => {
-  const rid = String(roomId);
+const finalizeRoundAsNoGuess = async (roomIdentifier, io) => {
+  const room = await resolveRoom(roomIdentifier);
+  if (!room) return;
+  const rid = String(room._id);
+  const socketRoomKey = String(room.roomCode);
+
   const state = roomState.get(rid);
   if (!state) return;
   state.resolved = true;
@@ -106,11 +131,10 @@ const finalizeRoundAsNoGuess = async (roomId, io) => {
     state.timer = null;
   }
 
-  const room = await GameRoom.findById(rid);
   const players = await User.find({ roomId: rid });
 
   // compute per-player points for "no guess" case
-  const pointsMap = new Map(); // userIdString -> points
+  const pointsMap = new Map();
   players.forEach((p) => {
     let pts = 0;
     if (p.role === "King") pts = 1000;
@@ -123,7 +147,6 @@ const finalizeRoundAsNoGuess = async (roomId, io) => {
 
   await Promise.all(players.map((p) => p.save()));
 
-  // create playerScores array from pointsMap
   const playerScores = players.map((p) => ({
     userId: p._id,
     points: pointsMap.get(p._id.toString()) || 0,
@@ -147,20 +170,17 @@ const finalizeRoundAsNoGuess = async (roomId, io) => {
     guessedAt: new Date(),
   });
 
-  io.to(rid).emit("roundResult", { success: false, message: "No guess made in time" });
+  io.to(socketRoomKey).emit("roundResult", { success: false, message: "No guess made in time" });
 
-  const leaderboard = await User.find({ roomId: rid })
-    .sort({ score: -1 })
-    .select("name score role");
-  io.to(rid).emit("leaderboard", leaderboard);
+  const leaderboard = await User.find({ roomId: rid }).sort({ score: -1 }).select("name score role");
+  io.to(socketRoomKey).emit("leaderboard", leaderboard);
 
-  io.to(rid).emit("revealRoles", players.map((p) => ({ name: p.name, role: p.role })));
+  io.to(socketRoomKey).emit("revealRoles", players.map((p) => ({ name: p.name, role: p.role })));
 
   setTimeout(async () => {
     room.currentRound += 1;
     await room.save();
     // cleanup
-    // ensure any timer cleared
     const st = roomState.get(rid);
     if (st?.timer) clearTimeout(st.timer);
     roomState.delete(rid);
@@ -168,7 +188,7 @@ const finalizeRoundAsNoGuess = async (roomId, io) => {
     if (room.totalRounds && room.currentRound > room.totalRounds) {
       room.gameStatus = "finished";
       await room.save();
-      io.to(rid).emit("gameFinished");
+      io.to(socketRoomKey).emit("gameFinished");
       await computeAndBroadcastWinner(rid, io);
     } else {
       await startRound(rid, io);
@@ -176,11 +196,17 @@ const finalizeRoundAsNoGuess = async (roomId, io) => {
   }, 5000);
 };
 
-const handlePoliceGuess = async (roomId, policeId, guessedUserId, io, socket) => {
-  const rid = String(roomId);
+const handlePoliceGuess = async (roomIdentifier, policeId, guessedUserId, io, socket) => {
+  const room = await resolveRoom(roomIdentifier);
+  if (!room) {
+    socket.emit("error", { message: "Room not found" });
+    return;
+  }
+  const rid = String(room._id);
+  const socketRoomKey = String(room.roomCode);
+
   const state = roomState.get(rid);
 
-  // 🎮 If the round has already ended (timer ran out or result decided), and police tries to guess — ignore it and show error.
   if (!state || state.resolved) {
     socket.emit("error", { message: "Round already Finished" });
     return;
@@ -196,7 +222,6 @@ const handlePoliceGuess = async (roomId, policeId, guessedUserId, io, socket) =>
   }
   state.resolved = true;
 
-  const room = await GameRoom.findById(rid);
   const players = await User.find({ roomId: rid });
   const police = players.find((p) => p._id.toString() === policeId);
   const guessed = players.find((p) => p._id.toString() === guessedUserId);
@@ -204,15 +229,10 @@ const handlePoliceGuess = async (roomId, policeId, guessedUserId, io, socket) =>
 
   const targetRole = state.instruction === "Find Chor" ? "Chor" : "Dakat";
 
-  // compute per-player points according to rules
-  const pointsMap = new Map(); // userIdString -> points
+  const pointsMap = new Map();
 
   if (guessed && guessed.role === targetRole) {
-    // police guessed right
-    // rules:
-    // King:1000, Police:800, guessedUser:0
-    // remaining player: if role === 'Chor' -> 400, if role === 'Dakat' -> 600
-    players.forEach((p) => pointsMap.set(p._id.toString(), 0)); // init
+    players.forEach((p) => pointsMap.set(p._id.toString(), 0));
     if (king) pointsMap.set(king._id.toString(), 1000);
     if (police) pointsMap.set(police._id.toString(), 800);
     pointsMap.set(guessed._id.toString(), 0);
@@ -230,9 +250,6 @@ const handlePoliceGuess = async (roomId, policeId, guessedUserId, io, socket) =>
       pointsMap.set(remaining._id.toString(), remPts);
     }
   } else {
-    // police guessed wrong (or guessed is invalid)
-    // rules:
-    // King:1000, Police:0, Chor:400, Dakat:600
     players.forEach((p) => {
       let pts = 0;
       if (p.role === "King") pts = 1000;
@@ -243,18 +260,13 @@ const handlePoliceGuess = async (roomId, policeId, guessedUserId, io, socket) =>
     });
   }
 
-  // apply increments to users and save
   players.forEach((p) => {
     const inc = pointsMap.get(p._id.toString()) || 0;
     p.score = (p.score || 0) + inc;
   });
   await Promise.all(players.map((p) => p.save()));
 
-  // build playerScores array
-  const playerScores = players.map((p) => ({
-    userId: p._id,
-    points: pointsMap.get(p._id.toString()) || 0,
-  }));
+  const playerScores = players.map((p) => ({ userId: p._id, points: pointsMap.get(p._id.toString()) || 0 }));
 
   await Round.create({
     roomId: rid,
@@ -274,20 +286,19 @@ const handlePoliceGuess = async (roomId, policeId, guessedUserId, io, socket) =>
     guessedAt: new Date(),
   });
 
-  io.to(rid).emit("roundResult", {
+  io.to(socketRoomKey).emit("roundResult", {
     isCorrect: guessed && guessed.role === targetRole,
     message: guessed && guessed.role === targetRole ? "Police caught correctly" : "Police guessed wrong",
   });
 
-  io.to(rid).emit("revealRoles", players.map((p) => ({ name: p.name, role: p.role })));
+  io.to(socketRoomKey).emit("revealRoles", players.map((p) => ({ name: p.name, role: p.role })));
   const leaderboard = await User.find({ roomId: rid }).sort({ score: -1 }).select("name score role");
-  io.to(rid).emit("leaderboard", leaderboard);
+  io.to(socketRoomKey).emit("leaderboard", leaderboard);
 
   setTimeout(async () => {
     const roomDoc = await GameRoom.findById(rid);
     roomDoc.currentRound += 1;
 
-    // ensure any timer cleared
     const st = roomState.get(rid);
     if (st?.timer) clearTimeout(st.timer);
     roomState.delete(rid);
@@ -295,7 +306,7 @@ const handlePoliceGuess = async (roomId, policeId, guessedUserId, io, socket) =>
     if (roomDoc.totalRounds && roomDoc.currentRound > roomDoc.totalRounds) {
       roomDoc.gameStatus = "finished";
       await roomDoc.save();
-      io.to(rid).emit("gameFinished");
+      io.to(socketRoomKey).emit("gameFinished");
       await computeAndBroadcastWinner(rid, io);
     } else {
       await roomDoc.save();
@@ -304,12 +315,12 @@ const handlePoliceGuess = async (roomId, policeId, guessedUserId, io, socket) =>
   }, 5000);
 };
 
-const startRoomLoop = async (roomId, io) => {
-  const rid = String(roomId);
-  if (roomState.has(rid)) return;
-  const room = await GameRoom.findById(rid);
+const startRoomLoop = async (roomIdentifier, io) => {
+  // resolve to DB room and then start rounds using DB _id
+  const room = await resolveRoom(roomIdentifier);
   if (!room) return;
-
+  const rid = String(room._id);
+  if (roomState.has(rid)) return;
   await startRound(rid, io);
 };
 
