@@ -74,7 +74,13 @@ export default function Lobby() {
                     console.log("gameStarted payload:", payload);
                     const code = payload?.roomCode || payload?.roomId || paramRoomCode || location.state?.roomCode;
                     if (code) {
-                        navigate(`/game/${code}`);
+                        // preserve current userId and roomCode so GamePage can reregister the new socket
+                        navigate(`/game/${code}`, {
+                            state: {
+                                userId: location.state?.userId || null,
+                                roomCode: code,
+                            },
+                        });
                     }
                 });
             }

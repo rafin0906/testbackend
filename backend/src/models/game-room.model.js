@@ -27,7 +27,7 @@ const GameRoomSchema = new mongoose.Schema(
       required: true,
       min: [1, "Must have at least 1 round"],
       max: [40, "Cannot exceed 40 rounds"],
-      default: 5,
+      default: 1,
     },
     currentRound: {
       type: Number,

@@ -58,6 +58,53 @@ export default function socketHandler(io) {
       }
     });
 
+    // reregister: when client reconnects / navigates and obtains a new socket.id
+    socket.on("reregister", async ({ userId, roomCode }) => {
+      if (!userId) return;
+      try {
+        console.log("reregistering socket for user:", userId, "new socket:", socket.id);
+        const user = await User.findByIdAndUpdate(
+          userId,
+          { socketId: socket.id },
+          { new: true }
+        ).select("_id name isHost roomId");
+
+        // re-join DB room if present
+        if (user && user.roomId) {
+          socket.join(String(user.roomId));
+          console.log(`reregister: socket ${socket.id} joined DB roomId:`, String(user.roomId));
+        }
+
+        // also join by roomCode if provided (try resolve DB room)
+        if (roomCode) {
+          const roomDoc = await GameRoom.findOne({ roomCode: String(roomCode) }).select("_id roomCode");
+          if (roomDoc) {
+            socket.join(String(roomDoc.roomCode));
+            socket.join(String(roomDoc._id));
+            console.log(`reregister: socket ${socket.id} joined roomCode and roomId:`, roomDoc.roomCode, roomDoc._id);
+          } else {
+            socket.join(String(roomCode));
+            console.log(`reregister: socket ${socket.id} joined roomCode (no DB match):`, roomCode);
+          }
+        }
+
+        // send current player list to room(s) so the just-reconnected client gets up-to-date state
+        const players =
+          user && user.roomId
+            ? await User.find({ roomId: user.roomId }).select("_id name isHost")
+            : [];
+
+        if (user && user.roomId && io) {
+          io.to(String(user.roomId)).emit("playerList", players);
+        }
+        if (roomCode && io) {
+          io.to(String(roomCode)).emit("playerList", players);
+        }
+      } catch (err) {
+        console.error("reregister handler error:", err);
+      }
+    });
+
     // allow clients that don't know their userId (e.g. on page refresh) to join by roomCode
     socket.on("joinRoomSocket", async ({ roomCode }) => {
       try {

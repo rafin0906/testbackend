@@ -33,6 +33,9 @@ const GamePage = () => {
   const [roundResultMessage, setRoundResultMessage] = useState(null);
   const [gameWinner, setGameWinner] = useState(null);
 
+  // history of per-round scores: array of arrays [{ userId, points }, ...]
+  const [roundsHistory, setRoundsHistory] = useState([]);
+
   const socketRef = useRef(null);
   const timerRef = useRef(null);
 
@@ -73,8 +76,12 @@ const GamePage = () => {
 
     socket.on("connect", () => {
       const navUserId = myUserId;
+
       if (navUserId) {
         socket.emit("register", { userId: navUserId, roomCode: code });
+        // ensure DB has the newly-assigned socket.id when navigating -> reregister
+        socket.emit("reregister", { userId: navUserId, roomCode: code });
+        console.log("reregister emitted for userId from navigation:", navUserId, "roomCode:", code);
       } else {
         socket.emit("joinRoomSocket", { roomCode: code });
       }
@@ -82,7 +89,7 @@ const GamePage = () => {
 
     // start timer when backend announces a new round
     socket.on("roundStarted", (payload) => {
-      // console.log("roundStarted payload:", payload);
+      console.log("roundStarted payload:", payload);
       const seconds =
         typeof payload?.time === "number"
           ? payload.time
@@ -116,7 +123,7 @@ const GamePage = () => {
 
     // individual role assigned (sent privately to each client)
     socket.on("yourRole", (payload) => {
-      // console.log("yourRole:", payload);
+      console.log("yourRole:", payload);
       if (payload && payload.role) {
         setMyRole(payload.role);
       }
@@ -124,19 +131,28 @@ const GamePage = () => {
 
     // police specific private instruction
     socket.on("policeInstruction", (payload) => {
-      // console.log("policeInstruction:", payload);
+      console.log("policeInstruction:", payload);
       setPrivateInstruction(payload?.instruction || null);
     });
 
     // round result -> stop timer and optionally show message
     socket.on("roundResult", (payload) => {
-      // console.log("roundResult:", payload);
+      console.log("roundResult:", payload);
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
       setTimeLeft(0);
       setRoundResultMessage(payload?.message ?? null);
+
+      // accept per-round playerScores if provided and append to history
+      const playerScores = Array.isArray(payload?.playerScores) ? payload.playerScores : [];
+      if (playerScores.length > 0) {
+        setRoundsHistory((prev) => {
+          // append this round's scores
+          return [...prev, playerScores];
+        });
+      }
 
       // refresh players / leaderboard from server so UI reflects new scores
       if (code) {
@@ -146,7 +162,7 @@ const GamePage = () => {
 
     // reveal roles to all in room (may be used to update player UI)
     socket.on("revealRoles", (payload) => {
-      // console.log("revealRoles:", payload);
+      console.log("revealRoles:", payload);
       // payload is array like [{ name, role }, ...] — refresh players to pick up roles/scores
       if (code) {
         loadPlayersByRoomCode(code).catch((err) => console.error("Failed reload players:", err));
@@ -155,7 +171,7 @@ const GamePage = () => {
 
     // leaderboard event -> refresh players
     socket.on("leaderboard", (payload) => {
-      // console.log("leaderboard event:", payload);
+      console.log("leaderboard event:", payload);
       if (code) {
         loadPlayersByRoomCode(code).catch((err) => console.error("Failed reload players:", err));
       }
@@ -163,7 +179,7 @@ const GamePage = () => {
 
     // game finished / winner
     socket.on("gameFinished", () => {
-      // console.log("gameFinished");
+      console.log("gameFinished");
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
@@ -173,7 +189,7 @@ const GamePage = () => {
     });
 
     socket.on("gameWinner", (payload) => {
-      // console.log("gameWinner:", payload);
+      console.log("gameWinner:", payload);
       setGameWinner(payload ?? null);
       // refresh players/leaderboard
       if (code) {
@@ -182,7 +198,7 @@ const GamePage = () => {
     });
 
     socket.on("disconnect", (reason) => {
-      // console.log("GamePage socket disconnected:", reason);
+      console.log("GamePage socket disconnected:", reason);
     });
 
     return () => {
@@ -207,7 +223,7 @@ const GamePage = () => {
 
   useEffect(() => {
     if (!Array.isArray(players)) return;
-    console.log("Player IDs:", players.map((p, i) => ({ slot: i + 1, id: p?.id || "" })));
+    // console.log("Player IDs:", players.map((p, i) => ({ slot: i + 1, id: p?.id || "" })));
   }, [players]);
 
   const images = [demo1, demo2, demo3, demo4];
@@ -277,7 +293,7 @@ const GamePage = () => {
 
       {/* LeaderBoard */}
       <div className="mt-4">
-        <LeaderBoard />
+        <LeaderBoard roundsHistory={roundsHistory} />
       </div>
     </div>
   );
