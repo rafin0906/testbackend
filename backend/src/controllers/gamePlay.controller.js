@@ -117,7 +117,7 @@ const startRound = async (roomIdentifier, io) => {
   const kingPlayer = freshPlayers.find((p) => p.role === "King");
   const kingPayload = kingPlayer ? { id: kingPlayer._id.toString(), name: kingPlayer.name } : null;
 
-    // find who is Police this round and prepare payload info
+  // find who is Police this round and prepare payload info
   const policePlayer = freshPlayers.find((p) => p.role === "Police");
   const policePayload = policePlayer ? { id: policePlayer._id.toString(), name: policePlayer.name } : null;
 
@@ -204,6 +204,8 @@ const finalizeRoundAsNoGuess = async (roomIdentifier, io) => {
     points: pointsMap.get(p._id.toString()) || 0,
   }));
 
+  const targetRole = state.instruction === "Find Chor" ? "Chor" : "Dakat";
+
   await Round.create({
     roomId: rid,
     roundNumber: state.activeRoundNumber,
@@ -228,6 +230,7 @@ const finalizeRoundAsNoGuess = async (roomIdentifier, io) => {
     success: false,
     message: "No guess made in time",
     playerScores,
+    targetRole,
   });
 
   const leaderboard = await User.find({ roomId: rid }).sort({ score: -1 }).select("name score role");
@@ -365,6 +368,7 @@ const handlePoliceGuess = async (roomIdentifier, policeId, guessedUserId, io, so
     isCorrect: guessed && guessed.role === targetRole,
     message: guessed && guessed.role === targetRole ? "Police caught correctly" : "Police guessed wrong",
     playerScores,
+    targetRole,
   });
 
   console.log("Emitting revealRoles to:", socketRoomKey);

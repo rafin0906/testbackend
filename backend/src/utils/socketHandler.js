@@ -173,10 +173,15 @@ export default function socketHandler(io) {
     // payload: { roomId, policeId, guessedUserId }
     socket.on("policeGuess", async ({ roomId, policeId, guessedUserId }) => {
       try {
+        // server-side validation and scoring handled in controller
         await handlePoliceGuess(roomId, policeId, guessedUserId, io, socket);
       } catch (err) {
-        console.error("policeGuess handling error:", err);
-        socket.emit("error", { message: "Guess processing failed" });
+        console.error("policeGuess handler error:", err);
+        try {
+          socket.emit("error", { message: "Failed to process guess" });
+        } catch (emitErr) {
+          console.error("Failed to emit error to socket:", emitErr);
+        }
       }
     });
 

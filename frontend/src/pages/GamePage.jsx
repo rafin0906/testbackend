@@ -51,6 +51,11 @@ const GamePage = () => {
   const [revealVisible, setRevealVisible] = useState(false);
   const revealTimeoutRef = useRef(null);
 
+  // new verdict state for round-result card
+  const [verdictVisible, setVerdictVisible] = useState(false);
+  const [verdictMessageState, setVerdictMessageState] = useState(null);
+  const verdictTimeoutRef = useRef(null);
+
   const socketRef = useRef(null);
   const timerRef = useRef(null);
 
@@ -183,6 +188,28 @@ const GamePage = () => {
       setTimeLeft(0);
       setRoundResultMessage(payload?.message ?? null);
 
+      // show verdict card in middle based on payload.isCorrect and payload.targetRole
+      const targetRole = payload?.targetRole || payload?.targetrole || payload?.role || "target";
+      const isCorrect = Boolean(payload?.isCorrect);
+      const verdictText = isCorrect
+        ? `Congratulation, ${targetRole} caught`
+        : `Sad, ${targetRole} fled away.`;
+
+      // clear any previous verdict timeout
+      if (verdictTimeoutRef.current) {
+        clearTimeout(verdictTimeoutRef.current);
+        verdictTimeoutRef.current = null;
+      }
+      setVerdictMessageState(verdictText);
+      setVerdictVisible(true);
+      // auto-hide after 3s
+      verdictTimeoutRef.current = setTimeout(() => {
+        setVerdictVisible(false);
+        // small delay before clearing text so exit animation can run
+        setTimeout(() => setVerdictMessageState(null), 200);
+        verdictTimeoutRef.current = null;
+      }, 3000);
+
       // accept per-round playerScores if provided and append to history
       const playerScores = Array.isArray(payload?.playerScores) ? payload.playerScores : [];
       if (playerScores.length > 0) {
@@ -272,6 +299,10 @@ const GamePage = () => {
         clearTimeout(revealTimeoutRef.current);
         revealTimeoutRef.current = null;
       }
+      if (verdictTimeoutRef.current) {
+        clearTimeout(verdictTimeoutRef.current);
+        verdictTimeoutRef.current = null;
+      }
       if (socketRef.current) {
         socketRef.current.off("roundStarted");
         socketRef.current.off("yourRole");
@@ -317,6 +348,24 @@ const GamePage = () => {
     typeof timeLeft === "number" && typeof totalTime === "number" && totalTime > 0
       ? Math.max(0, Math.min(100, Math.round((timeLeft / totalTime) * 100)))
       : 0;
+
+  // handle clicking a player card (police-only action)
+  const handlePlayerClick = (guessedUserId) => {
+    if (!socketRef.current) return;
+    if (!myUserId) return;
+    // quick client-side guard: only allow if this client is police
+    if (myRole !== "Police") return;
+    // can't guess yourself
+    if (!guessedUserId || String(guessedUserId) === String(myUserId)) return;
+
+    // emit policeGuess to server (server will validate police privilege)
+    socketRef.current.emit("policeGuess", {
+      roomId: codeForThis,
+      policeId: myUserId,
+      guessedUserId,
+    });
+    console.log("policeGuess emitted:", { roomId: codeForThis, policeId: myUserId, guessedUserId });
+  };
 
   return (
     <div
@@ -407,7 +456,13 @@ const GamePage = () => {
 
       {/* Player Grid */}
       <div className="flex justify-center mt-10">
-        <PlayerGrid players={playersForGrid} />
+        <PlayerGrid
+          players={playersForGrid}
+          onPlayerClick={handlePlayerClick}
+          myUserId={myUserId}
+          myRole={myRole}
+          policeId={policeId}
+        />
       </div>
 
       {/* Notification OR Role Card (same spot) */}
@@ -432,8 +487,8 @@ const GamePage = () => {
           {/* card */}
           <div
             className={`relative z-10 mx-4 w-full max-w-lg transform transition-all duration-350 ${showWinnerVisible
-                ? "opacity-100 scale-100 translate-y-0"
-                : "opacity-0 scale-95 -translate-y-6"
+              ? "opacity-100 scale-100 translate-y-0"
+              : "opacity-0 scale-95 -translate-y-6"
               }`}
             role="dialog"
             aria-modal="true"
@@ -494,6 +549,32 @@ const GamePage = () => {
           </div>
         </div>
       )}
+
+      {/* Verdict card shown briefly after a round finishes */}
+      {verdictVisible && verdictMessageState && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none">
+          <div
+            className="absolute inset-0 bg-black/10 transition-opacity duration-200"
+            style={{ backdropFilter: "blur(2px)" }}
+          />
+          <div
+            className={`relative z-50 pointer-events-auto mx-4 w-full max-w-md transform transition-all duration-250 ${verdictVisible ? "opacity-100 scale-100" : "opacity-0 scale-95"
+              }`}
+            role="status"
+            aria-live="polite"
+          >
+            <div className="bg-gradient-to-tr from-yellow-50 via-amber-50 to-orange-50 border border-yellow-200 rounded-2xl shadow-[0_8px_20px_rgba(0,0,0,0.35)] p-5 sm:p-6 text-center">
+              <div
+                className="text-xl sm:text-2xl font-bold mb-1 text-black-800 drop-shadow-sm"
+                style={{ fontFamily: "Sunflower, sans-serif" }}
+              >
+                {verdictMessageState}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
 
     </div>
   );
