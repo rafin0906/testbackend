@@ -10,6 +10,8 @@ import connectDB from "./db/index.js";
 import app from "./app.js";
 import socketHandler from "./utils/socketHandler.js";
 
+
+
 const PORT = process.env.PORT || 8000;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:5173";
 
