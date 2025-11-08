@@ -386,7 +386,7 @@ const GamePage = () => {
         </div>
       </div>
 
-      <BackArrow />
+    
 
       {/* Reveal Roles Card (responsive) */}
       <div
