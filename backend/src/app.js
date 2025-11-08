@@ -8,7 +8,7 @@ const app = express();
 const __dirname = path.resolve();
 
 app.use(cors({ 
-    origin: process.env.CORS_ORIGIN || "*" ,
+    origin: process.env.CORS_ORIGIN || "https://chorpolice.onrender.com" ,
     credentials: true,
 }));
 
