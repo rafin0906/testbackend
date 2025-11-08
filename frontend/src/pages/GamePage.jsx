@@ -91,7 +91,7 @@ const GamePage = () => {
     const code = codeForThis;
     if (!code) return;
 
-    const socket = io("http://localhost:8000", { withCredentials: true });
+    const socket = io("https://chorpolice.onrender.com/", { withCredentials: true });
     socketRef.current = socket;
 
     socket.on("connect", () => {

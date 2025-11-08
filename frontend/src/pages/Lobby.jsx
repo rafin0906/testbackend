@@ -43,7 +43,7 @@ export default function Lobby() {
 
             // create socket connection AFTER room/players loaded
             if (!socketRef.current) {
-                const socket = io("http://localhost:8000", { withCredentials: true });
+                const socket = io("https://chorpolice.onrender.com/", { withCredentials: true });
                 socketRef.current = socket;
 
                 socket.on("connect", () => {
