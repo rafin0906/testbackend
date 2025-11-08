@@ -27,15 +27,29 @@ const GamePage = () => {
   const [roundNumber, setRoundNumber] = useState(null);
   const [instruction, setInstruction] = useState(null);
   const [kingId, setKingId] = useState(null);
+  const [policeId, setPoliceId] = useState(null);
+
+  // notification when a new round starts
+  const [roundNotification, setRoundNotification] = useState(null);
+  const notificationTimeoutRef = useRef(null);
+  const [notificationVisible, setNotificationVisible] = useState(false);
 
   // new UI states for role, private instruction, and round/game events
   const [myRole, setMyRole] = useState(null);
   const [privateInstruction, setPrivateInstruction] = useState(null);
   const [roundResultMessage, setRoundResultMessage] = useState(null);
   const [gameWinner, setGameWinner] = useState(null);
+  // show/hide winner overlay
+  const [showWinnerVisible, setShowWinnerVisible] = useState(false);
+  const winnerAutoHideRef = useRef(null);
 
   // history of per-round scores: array of arrays [{ userId, points }, ...]
   const [roundsHistory, setRoundsHistory] = useState([]);
+
+  // reveal roles UI state
+  const [revealRolesData, setRevealRolesData] = useState(null);
+  const [revealVisible, setRevealVisible] = useState(false);
+  const revealTimeoutRef = useRef(null);
 
   const socketRef = useRef(null);
   const timerRef = useRef(null);
@@ -99,11 +113,32 @@ const GamePage = () => {
       setTotalTime(seconds);
       setRoundNumber(payload?.roundNumber ?? null);
       setInstruction(payload?.instruction ?? null);
-      // accept king info from server
+      // accept king and police info from server
       setKingId(payload?.king?.id || payload?.kingId || null);
+      setPoliceId(payload?.police?.id || payload?.policeId || null);
       setPrivateInstruction(null); // reset private instruction each round
       setRoundResultMessage(null);
       setTimeLeft(seconds);
+
+      // show a responsive user notification like "Round 3 started"
+      const roundNum = payload?.roundNumber ?? payload?.round ?? "-";
+      const text = `Round ${roundNum} started`;
+      // clear any previous timeout
+      if (notificationTimeoutRef.current) {
+        clearTimeout(notificationTimeoutRef.current);
+        notificationTimeoutRef.current = null;
+      }
+      // set text and animate pop-in from top; auto-hide after 2.5s
+      setRoundNotification(text);
+      setNotificationVisible(true);
+      notificationTimeoutRef.current = setTimeout(() => {
+        setNotificationVisible(false);
+        // wait for exit animation to finish before clearing text
+        setTimeout(() => {
+          setRoundNotification(null);
+        }, 300);
+        notificationTimeoutRef.current = null;
+      }, 2500);
 
       // clear any existing interval
       if (timerRef.current) {
@@ -166,6 +201,22 @@ const GamePage = () => {
     // reveal roles to all in room (may be used to update player UI)
     socket.on("revealRoles", (payload) => {
       console.log("revealRoles:", payload);
+      // store payload for UI and auto-show the reveal card
+      setRevealRolesData(payload || null);
+      setRevealVisible(true);
+
+      // auto-hide after 5s (clear any previous timeout)
+      if (revealTimeoutRef.current) {
+        clearTimeout(revealTimeoutRef.current);
+        revealTimeoutRef.current = null;
+      }
+      revealTimeoutRef.current = setTimeout(() => {
+        setRevealVisible(false);
+        // wait a bit then clear data
+        setTimeout(() => setRevealRolesData(null), 300);
+        revealTimeoutRef.current = null;
+      }, 5000);
+
       // payload is array like [{ name, role }, ...] — refresh players to pick up roles/scores
       if (code) {
         loadPlayersByRoomCode(code).catch((err) => console.error("Failed reload players:", err));
@@ -189,11 +240,15 @@ const GamePage = () => {
       }
       setTimeLeft(null);
       setTotalTime(null);
+      // show winner overlay when game finishes (gameWinner will be populated by gameWinner event)
+      setShowWinnerVisible(true);
     });
 
     socket.on("gameWinner", (payload) => {
       console.log("gameWinner:", payload);
       setGameWinner(payload ?? null);
+      // ensure overlay is visible if gameWinner arrives after gameFinished
+      setShowWinnerVisible(true);
       // refresh players/leaderboard
       if (code) {
         loadPlayersByRoomCode(code).catch((err) => console.error("Failed reload players:", err));
@@ -208,6 +263,14 @@ const GamePage = () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
+      }
+      if (notificationTimeoutRef.current) {
+        clearTimeout(notificationTimeoutRef.current);
+        notificationTimeoutRef.current = null;
+      }
+      if (revealTimeoutRef.current) {
+        clearTimeout(revealTimeoutRef.current);
+        revealTimeoutRef.current = null;
       }
       if (socketRef.current) {
         socketRef.current.off("roundStarted");
@@ -236,10 +299,10 @@ const GamePage = () => {
   const playersForGrid = Array.from({ length: 4 }).map((_, idx) => {
     const p = Array.isArray(players) && players[idx] ? players[idx] : { id: "", name: "", isHost: false };
     const baseName = p.name && p.name.trim() ? p.name : `Waiting ${idx + 1}`;
-    // append badges for host and king
+    // remove host badge entirely; append KIng and Police labels when ids match
     let displayName = baseName;
-    if (p.isHost) displayName += " (Host)";
-    if (p.id && kingId && p.id === kingId) displayName += " (King)";
+    if (p.id && kingId && String(p.id) === String(kingId)) displayName += " (KIng)";
+    if (p.id && policeId && String(p.id) === String(policeId)) displayName += " (Police)";
     return {
       id: p.id || "",
       name: displayName,
@@ -260,7 +323,62 @@ const GamePage = () => {
       className="min-h-screen bg-[#fffdee] bg-cover bg-center relative px-4 py-4"
       style={{ backgroundImage: "url('/bg-doodles.png')" }}
     >
+      {/* Top popping notification (appears from top, auto-hides) */}
+      <div
+        aria-live="polite"
+        className={`fixed top-6 left-1/2 -translate-x-1/2 z-40 transition-all duration-300 ease-out pointer-events-none ${notificationVisible ? "translate-y-0 opacity-100 scale-100" : "-translate-y-12 opacity-0 scale-95"
+          }`}
+      >
+        <div
+          className="bg-[#FFF297] rounded-xl px-8 py-4 text-center shadow-lg w-[320px]"
+          style={{ fontFamily: "LipighorBangla" }}
+        >
+          <div className="text-xl font-bold">{roundNotification}</div>
+        </div>
+      </div>
+
       <BackArrow />
+
+      {/* Reveal Roles Card (responsive) */}
+      <div
+        aria-live="polite"
+        className={`fixed inset-0 z-50 flex items-start justify-center pointer-events-none px-4 pt-8 transition-all duration-300 ${revealVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-8"
+          }`}
+      >
+        <div
+          className="pointer-events-auto w-full max-w-md bg-white rounded-xl shadow-lg p-4 sm:p-6"
+          style={{ fontFamily: "Sunflower" }}
+        >
+          <div className="flex items-center justify-between">
+            <div className="text-lg font-bold">Round Reveal</div>
+            <div className="text-sm text-gray-500">Revealed</div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {(() => {
+              // normalize payload: array of { role, name } or { role, userId }
+              const arr = Array.isArray(revealRolesData) ? revealRolesData : [];
+              const getName = (item) => item?.name || item?.displayName || item?.username || "";
+              const chor = arr.find((r) => String(r.role).toLowerCase() === "chor");
+              const dakat = arr.find((r) => String(r.role).toLowerCase() === "dakat");
+              return (
+                <>
+                  <div className="bg-yellow-50 rounded-md p-3 flex flex-col items-start">
+                    <div className="text-xs text-gray-500">Chor</div>
+                    <div className="text-sm font-semibold">{chor ? getName(chor) : "-"}</div>
+                  </div>
+                  <div className="bg-yellow-50 rounded-md p-3 flex flex-col items-start">
+                    <div className="text-xs text-gray-500">Dakat</div>
+                    <div className="text-sm font-semibold">{dakat ? getName(dakat) : "-"}</div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+
+
+        </div>
+      </div>
 
       {/* Inline Timer UI (synchronized with backend via socket events) */}
       <div className="flex flex-col items-center mt-4">
@@ -292,7 +410,7 @@ const GamePage = () => {
         <PlayerGrid players={playersForGrid} />
       </div>
 
-      {/* Role Card */}
+      {/* Notification OR Role Card (same spot) */}
       <div className="flex justify-center mt-16">
         <RoleCard role={myRole} description={privateInstruction || instruction || ""} />
       </div>
@@ -301,6 +419,82 @@ const GamePage = () => {
       <div className="mt-4">
         <LeaderBoard roundsHistory={roundsHistory} />
       </div>
+
+      {/* Winner Overlay */}
+      {showWinnerVisible && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* backdrop */}
+          <div
+            className="absolute inset-0 bg-black/20 backdrop-blur-[2px] transition-opacity duration-300"
+            style={{ opacity: gameWinner ? 0.25 : 0.2 }}
+            onClick={() => setShowWinnerVisible(false)}
+          />
+          {/* card */}
+          <div
+            className={`relative z-10 mx-4 w-full max-w-lg transform transition-all duration-350 ${showWinnerVisible
+                ? "opacity-100 scale-100 translate-y-0"
+                : "opacity-0 scale-95 -translate-y-6"
+              }`}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="bg-gradient-to-tr from-yellow-50 via-amber-50 to-orange-50 border border-yellow-200 rounded-2xl shadow-[0_8px_25px_rgba(0,0,0,0.35)] p-5 sm:p-8 text-center">
+
+              <div className="text-sm text-yellow-700 font-medium">Game Over</div>
+              <div className="mt-2 text-2xl sm:text-3xl font-extrabold text-black drop-shadow-sm">
+                {gameWinner && Array.isArray(gameWinner.winners)
+                  ? gameWinner.winners.length > 1
+                    ? "Winners!"
+                    : "Winner!"
+                  : "Winner"}
+              </div>
+
+              <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-center gap-3">
+                {gameWinner && Array.isArray(gameWinner.winners) && gameWinner.winners.length > 0 ? (
+                  gameWinner.winners.map((w, i) => (
+                    <div
+                      key={String(w.id || w._id || i)}
+                      className="bg-white/90 rounded-lg px-4 py-3 min-w-[140px] flex flex-col items-center border border-yellow-200 shadow-md hover:shadow-lg transition-shadow"
+                    >
+                      <div className="text-xs text-gray-500">Player</div>
+                      <div className="text-lg font-semibold text-black mt-1">
+                        {w.name || w.displayName || w.id}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-black">Results incoming...</div>
+                )}
+              </div>
+
+              {/* optional leaderboard snippet */}
+              {gameWinner && Array.isArray(gameWinner.leaderboard) && (
+                <div className="mt-4 bg-white/60 rounded-lg p-3 text-left text-sm text-black max-h-40 overflow-auto border border-yellow-200">
+                  <div className="font-semibold mb-2 text-yellow-900">Leaderboard</div>
+                  <ol className="list-decimal pl-5 space-y-1">
+                    {gameWinner.leaderboard.map((p) => (
+                      <li key={String(p.id)} className="flex justify-between">
+                        <span>{p.name}</span>
+                        <span className="font-semibold">{p.score}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+
+              <div className="mt-5 flex justify-center gap-3">
+                <button
+                  onClick={() => setShowWinnerVisible(false)}
+                  className="px-4 py-2 rounded-md bg-yellow-400 hover:bg-yellow-500 text-white font-semibold shadow-md transition-all duration-150"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { useRoom } from "../../context/RoomContext";
 
-const options = [10, 15, 20, 25];
+const options = [5, 15, 20, 25];
 
 export default function RoundSelector() {
   const { roomCode, selectedRounds, setSelectedRounds } = useRoom();
