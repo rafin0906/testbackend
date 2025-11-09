@@ -26,4 +26,14 @@ router.route("/:roomCode/is-host").get(verifyHost, checkIsHost);
 // secured: only host can start the game
 router.route('/:roomCode/start/:totalRounds').get(verifyHost, startGame);
 
+
+
+
+// ===========================
+router.route("/ping").get((req, res) => {
+  res.send("Server running");
+});
+// ===========================
+
+
 export default router;
