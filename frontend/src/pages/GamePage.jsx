@@ -352,7 +352,7 @@ const GamePage = () => {
     const baseName = p.name && p.name.trim() ? p.name : `Waiting ${idx + 1}`;
     // remove host badge entirely; append KIng and Police labels when ids match
     let displayName = baseName;
-    if (p.id && kingId && String(p.id) === String(kingId)) displayName += " (KIng)";
+    if (p.id && kingId && String(p.id) === String(kingId)) displayName += " (King)";
     if (p.id && policeId && String(p.id) === String(policeId)) displayName += " (Police)";
     return {
       id: p.id || "",
