@@ -67,17 +67,14 @@ const GamePage = () => {
   useEffect(() => {
     const handleBeforeUnload = (event) => {
       event.preventDefault();
-      event.returnValue = "⚠️ Don't refresh — if you refresh, you'll be out of the game!";
+      event.returnValue = "";
     };
-
+    window.addEventListener("beforeunload", handleBeforeUnload);
     const handleKeyDown = (event) => {
       if ((event.ctrlKey && event.key === "r") || event.key === "F5") {
         event.preventDefault();
-        alert("⚠️ Don’t refresh! You’ll be out of the game.");
       }
     };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("keydown", handleKeyDown);
 
     return () => {
@@ -85,7 +82,6 @@ const GamePage = () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, []);
-
 
   // ensure we fetch fresh players from backend on mount / reload
   useEffect(() => {
