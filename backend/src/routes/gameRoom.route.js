@@ -31,8 +31,9 @@ router.route('/:roomCode/start/:totalRounds').get(verifyHost, startGame);
 
 // ===========================
 router.route("/ping").get((req, res) => {
-  res.send("Server running");
+  res.status(200).json({ message: "Server running" });
 });
+
 // ===========================
 
 
