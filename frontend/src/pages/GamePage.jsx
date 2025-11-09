@@ -63,6 +63,26 @@ const GamePage = () => {
   const codeForThis = ctxRoomCode || paramRoomCode || location.state?.roomCode || null;
   const myUserId = location.state?.userId || null;
 
+    // ✅ Add this right here
+  useEffect(() => {
+    const handleBeforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    const handleKeyDown = (event) => {
+      if ((event.ctrlKey && event.key === "r") || event.key === "F5") {
+        event.preventDefault();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
   // ensure we fetch fresh players from backend on mount / reload
   useEffect(() => {
     const code = codeForThis;
