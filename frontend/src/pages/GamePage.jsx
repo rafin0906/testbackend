@@ -63,18 +63,21 @@ const GamePage = () => {
   const codeForThis = ctxRoomCode || paramRoomCode || location.state?.roomCode || null;
   const myUserId = location.state?.userId || null;
 
-    // ✅ Add this right here
+  // ✅ Add this right here
   useEffect(() => {
     const handleBeforeUnload = (event) => {
       event.preventDefault();
-      event.returnValue = "";
+      event.returnValue = "⚠️ Don't refresh — if you refresh, you'll be out of the game!";
     };
-    window.addEventListener("beforeunload", handleBeforeUnload);
+
     const handleKeyDown = (event) => {
       if ((event.ctrlKey && event.key === "r") || event.key === "F5") {
         event.preventDefault();
+        alert("⚠️ Don’t refresh! You’ll be out of the game.");
       }
     };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("keydown", handleKeyDown);
 
     return () => {
@@ -82,6 +85,7 @@ const GamePage = () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, []);
+
 
   // ensure we fetch fresh players from backend on mount / reload
   useEffect(() => {
@@ -406,7 +410,7 @@ const GamePage = () => {
         </div>
       </div>
 
-    
+
 
       {/* Reveal Roles Card (responsive) */}
       <div
